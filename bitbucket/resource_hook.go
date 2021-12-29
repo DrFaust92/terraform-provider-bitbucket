@@ -9,6 +9,7 @@ import (
 	"net/url"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 // Hook is the hook you want to add to a bitbucket repository
@@ -60,8 +61,36 @@ func resourceHook() *schema.Resource {
 			"events": {
 				Type:     schema.TypeSet,
 				Required: true,
-				Elem:     &schema.Schema{Type: schema.TypeString},
-				Set:      schema.HashString,
+				Elem: &schema.Schema{
+					Type: schema.TypeString,
+					ValidateFunc: validation.StringInSlice([]string{
+						"pullrequest:unapproved",
+						"issue:comment_created",
+						"repo:imported",
+						"repo:created",
+						"repo:commit_comment_created",
+						"pullrequest:approved",
+						"pullrequest:comment_updated",
+						"issue:updated",
+						"project:updated",
+						"repo:deleted",
+						"pullrequest:changes_request_created",
+						"pullrequest:comment_created",
+						"repo:commit_status_updated",
+						"pullrequest:updated",
+						"issue:created",
+						"repo:fork",
+						"pullrequest:comment_deleted",
+						"repo:commit_status_created",
+						"repo:updated",
+						"pullrequest:rejected",
+						"pullrequest:fulfilled",
+						"pullrequest:created",
+						"pullrequest:changes_request_removed",
+						"repo:transfer",
+						"repo:push",
+					}, false),
+				},
 			},
 			"skip_cert_verification": {
 				Type:     schema.TypeBool,

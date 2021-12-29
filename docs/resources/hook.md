@@ -37,4 +37,4 @@ The following arguments are supported:
 * `repository` - (Required) The name of the repository.
 * `url` - (Required) Where to POST to.
 * `description` - (Required) The name / description to show in the UI.
-* `events` - (Required) The event you want to react on.
+* `events` - (Required) The events this webhook is subscribed to. Valid values can be found at [Bitbucket Webhhok Docs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories/#api-repositories-workspace-repo-slug-hooks-post).
