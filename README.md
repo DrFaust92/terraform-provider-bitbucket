@@ -1,17 +1,4 @@
-# Maintenance status
-
-Unmaintained, maintainers needed! I just took the archived repository, and released it to the Terraform Registry. I'm not a Go developer, so I'll not be able to maintain this repository in the long run. PRs are welcome, and I'll try to merge and release them as frequently as possible.
-
-If you would like Atlassian to take ownership of the provider, you can voice your opinion at [BCLOUD-17209](https://jira.atlassian.com/browse/BCLOUD-17209).
-
-## History
-
-- Initally created during an Atlassian [24h hackathon](https://www.atlassian.com/company/shipit) by @cwood
-- Maintained by HashiCorp and @cwood with contributions from the community
-- [Archived](https://www.terraform.io/docs/internals/archiving.html) by HashiCorp due not being maintained (likely related to not being published to the registry)
-- Forked and published to [Terraform Registry](https://registry.terraform.io) by @aeirola
-
-Terraform Provider
+Bitbucket Terraform Provider
 ==================
 
 - Website: https://www.terraform.io
@@ -24,7 +11,7 @@ Requirements
 ------------
 
 -	[Terraform](https://www.terraform.io/downloads.html) 0.12.x
--	[Go](https://golang.org/doc/install) 1.11 (to build the provider plugin)
+-	[Go](https://golang.org/doc/install) 1.16 (to build the provider plugin)
 
 Building The Provider
 ---------------------
@@ -47,6 +34,15 @@ Using the provider
 ----------------------
 
 ```hcl
+terraform {
+  required_providers {
+    bitbucket = {
+      source  = "DrFaust92/bitbucket"
+      version = "version-here"
+    }
+  }
+}
+
 # Configure the Bitbucket Provider
 provider "bitbucket" {
   username = "GobBluthe"
@@ -96,10 +92,3 @@ In order to run the full suite of Acceptance tests, run `make testacc`.
 ```sh
 $ make testacc
 ```
-
-About V1 APIs
-------------------
-
-This provider will not take any PRs about the v1 apis that dont have v2
-equivalents. Please only focus on v2 apis when adding new featues to this
-provider.
