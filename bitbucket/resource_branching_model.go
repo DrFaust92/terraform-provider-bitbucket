@@ -8,12 +8,14 @@ import (
 	"log"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 // BranchingModel is the data we need to send to create a new branching model for the repository
 type BranchingModel struct {
-	Development *BranchModel `json:"development,omitempty"`
-	Production  *BranchModel `json:"production,omitempty"`
+	Development *BranchModel  `json:"development,omitempty"`
+	Production  *BranchModel  `json:"production,omitempty"`
+	BranchTypes []*BranchType `json:"branch_types"`
 }
 
 type BranchModel struct {
@@ -22,6 +24,12 @@ type BranchModel struct {
 	UseMainbranch      bool   `json:"use_mainbranch,omitempty"`
 	BranchDoesNotExist bool   `json:"branch_does_not_exist,omitempty"`
 	Enabled            bool   `json:"enabled,omitempty"`
+}
+
+type BranchType struct {
+	Enabled bool   `json:"enabled,omitempty"`
+	Kind    string `json:"kind,omitempty"`
+	Prefix  string `json:"prefix,omitempty"`
 }
 
 func resourceBranchingModel() *schema.Resource {
@@ -42,15 +50,38 @@ func resourceBranchingModel() *schema.Resource {
 				Required: true,
 				ForceNew: true,
 			},
+			"branch_type": {
+				Type:     schema.TypeSet,
+				Optional: true,
+				MaxItems: 4,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+							Computed: true,
+						},
+						"kind": {
+							Type:         schema.TypeString,
+							Required:     true,
+							ValidateFunc: validation.StringInSlice([]string{"feature", "bugfix", "release", "hotfix"}, false),
+						},
+						"prefix": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+					},
+				},
+			},
 			"development": {
 				Type:     schema.TypeList,
-				Optional: true,
+				Required: true,
 				MaxItems: 1,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
 						"is_valid": {
 							Type:     schema.TypeBool,
-							Optional: true,
+							Computed: true,
 						},
 						"name": {
 							Type:     schema.TypeString,
@@ -67,44 +98,35 @@ func resourceBranchingModel() *schema.Resource {
 					},
 				},
 			},
-			// "production": {
-			// 	Type:     schema.TypeList,
-			// 	Optional: true,
-			// 	MaxItems: 1,
-			// 	Elem: &schema.Resource{
-			// 		Schema: map[string]*schema.Schema{
-			// 			"is_valid": {
-			// 				Type:     schema.TypeBool,
-			// 				Computed: true,
-			// 			},
-			// 			"name": {
-			// 				Type:     schema.TypeString,
-			// 				Optional: true,
-			// 			},
-			// 			"use_mainbranch": {
-			// 				Type:     schema.TypeBool,
-			// 				Optional: true,
-			// 			},
-			// 			"branch_does_not_exist": {
-			// 				Type:     schema.TypeBool,
-			// 				Optional: true,
-			// 			},
-			// 			"enabled": {
-			// 				Type:     schema.TypeBool,
-			// 				Optional: true,
-			// 				DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-			// 					oldBool, _ := strconv.ParseBool(old)
-			// 					newBool, _ := strconv.ParseBool(new)
-
-			// 					log.Printf("lol3: %s", old)
-			// 					log.Printf("lol4: %s", new)
-
-			// 					return !oldBool && newBool
-			// 				},
-			// 			},
-			// 		},
-			// 	},
-			// },
+			"production": {
+				Type:     schema.TypeList,
+				Optional: true,
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"is_valid": {
+							Type:     schema.TypeBool,
+							Computed: true,
+						},
+						"name": {
+							Type:     schema.TypeString,
+							Optional: true,
+						},
+						"use_mainbranch": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+						"branch_does_not_exist": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+						"enabled": {
+							Type:     schema.TypeBool,
+							Optional: true,
+						},
+					},
+				},
+			},
 		},
 	}
 }
@@ -113,6 +135,7 @@ func resourceBranchingModelsPut(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Client)
 	branchingModel := expandBranchingModel(d)
 
+	log.Printf("[DEBUG] Branching Model Request: %#v", branchingModel)
 	bytedata, err := json.Marshal(branchingModel)
 
 	if err != nil {
@@ -151,23 +174,34 @@ func resourceBranchingModelsRead(d *schema.ResourceData, m interface{}) error {
 		d.Get("repository").(string),
 	))
 
-	if branchingModelsReq.StatusCode == 200 {
-		var branchingModel *BranchingModel
-		body, readerr := ioutil.ReadAll(branchingModelsReq.Body)
-		if readerr != nil {
-			return readerr
-		}
-
-		log.Printf("[DEBUG] Branching Model Response JSON: %v", string(body))
-
-		decodeerr := json.Unmarshal(body, &branchingModel)
-		if decodeerr != nil {
-			return decodeerr
-		}
-
-		d.Set("development", flattenBranchModel(branchingModel.Development, "development"))
-		// d.Set("production", flattenBranchModel(branchingModel.Production, "production"))
+	if branchingModelsReq.StatusCode == 404 {
+		log.Printf("[WARN] Branching Model (%s) not found, removing from state", d.Id())
+		d.SetId("")
+		return nil
 	}
+
+	if branchingModelsReq.Body == nil {
+		return fmt.Errorf("error getting Branching Model (%s): empty response", d.Id())
+	}
+
+	var branchingModel *BranchingModel
+	body, readerr := ioutil.ReadAll(branchingModelsReq.Body)
+	if readerr != nil {
+		return readerr
+	}
+
+	log.Printf("[DEBUG] Branching Model Response JSON: %v", string(body))
+
+	decodeerr := json.Unmarshal(body, &branchingModel)
+	if decodeerr != nil {
+		return decodeerr
+	}
+
+	log.Printf("[DEBUG] Branching Model Response Decoded: %#v", branchingModel)
+
+	d.Set("development", flattenBranchModel(branchingModel.Development, "development"))
+	d.Set("branch_type", flattenBranchTypes(branchingModel.BranchTypes))
+	d.Set("production", flattenBranchModel(branchingModel.Production, "production"))
 
 	return nil
 }
@@ -187,31 +221,23 @@ func resourceBranchingModelsDelete(d *schema.ResourceData, m interface{}) error 
 }
 
 func expandBranchingModel(d *schema.ResourceData) *BranchingModel {
-
-	// users := make([]User, 0, len(d.Get("users").(*schema.Set).List()))
-
-	// for _, item := range d.Get("users").(*schema.Set).List() {
-	// 	users = append(users, User{Username: item.(string)})
-	// }
-
-	// groups := make([]Group, 0, len(d.Get("groups").(*schema.Set).List()))
-
-	// for _, item := range d.Get("groups").(*schema.Set).List() {
-	// 	m := item.(map[string]interface{})
-	// 	groups = append(groups, Group{Owner: User{Username: m["owner"].(string)}, Slug: m["slug"].(string)})
-	// }
-
-	restict := &BranchingModel{}
+	model := &BranchingModel{}
 
 	if v, ok := d.GetOk("development"); ok && len(v.([]interface{})) > 0 && v.([]interface{}) != nil {
-		restict.Development = expandBranchModel(v.([]interface{}))
+		model.Development = expandBranchModel(v.([]interface{}))
 	}
 
 	if v, ok := d.GetOk("production"); ok && len(v.([]interface{})) > 0 && v.([]interface{}) != nil {
-		restict.Production = expandBranchModel(v.([]interface{}))
+		model.Production = expandBranchModel(v.([]interface{}))
 	}
 
-	return restict
+	if v, ok := d.GetOk("branch_type"); ok && v.(*schema.Set).Len() > 0 {
+		model.BranchTypes = expandBranchTypes(v.(*schema.Set))
+	} else {
+		model.BranchTypes = make([]*BranchType, 0)
+	}
+
+	return model
 }
 
 func expandBranchModel(l []interface{}) *BranchModel {
@@ -258,9 +284,68 @@ func flattenBranchModel(rp *BranchModel, typ string) []interface{} {
 		"name":                  rp.Name,
 	}
 
+	// if production branch is disabled it wont show up in response and will show up without the proerty if enabled
 	if typ == "production" {
-		m["enabled"] = rp.Enabled
+		m["enabled"] = true
 	}
 
 	return []interface{}{m}
+}
+
+func expandBranchTypes(tfList *schema.Set) []*BranchType {
+	if tfList.Len() == 0 {
+		return nil
+	}
+
+	var branchTypes []*BranchType
+
+	for _, tfMapRaw := range tfList.List() {
+		tfMap, ok := tfMapRaw.(map[string]interface{})
+
+		if !ok {
+			continue
+		}
+
+		bt := &BranchType{
+			Kind: tfMap["kind"].(string),
+		}
+
+		if v, ok := tfMap["prefix"].(string); ok {
+			bt.Prefix = v
+		}
+
+		if v, ok := tfMap["enabled"].(bool); ok {
+			bt.Enabled = v
+		}
+
+		branchTypes = append(branchTypes, bt)
+	}
+
+	return branchTypes
+}
+
+func flattenBranchTypes(branchTypes []*BranchType) []interface{} {
+	if len(branchTypes) == 0 {
+		return nil
+	}
+
+	var tfList []interface{}
+
+	for _, btRaw := range branchTypes {
+		log.Printf("[DEBUG] Branch Type Response Decoded: %#v", btRaw)
+
+		if btRaw == nil {
+			continue
+		}
+
+		branchType := map[string]interface{}{
+			"kind":    btRaw.Kind,
+			"prefix":  btRaw.Prefix,
+			"enabled": true,
+		}
+
+		tfList = append(tfList, branchType)
+	}
+
+	return tfList
 }

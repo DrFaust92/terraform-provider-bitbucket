@@ -34,6 +34,61 @@ func TestAccBitbucketBranchingModel_basic(t *testing.T) {
 	})
 }
 
+func TestAccBitbucketBranchingModel_production(t *testing.T) {
+	var branchRestriction BranchingModel
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branching_model.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckBitbucketBranchingModelDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchingModelProdConfig(testUser, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchingModelExists(resourceName, &branchRestriction),
+					resource.TestCheckResourceAttrPair(resourceName, "repository", "bitbucket_repository.test", "name"),
+					resource.TestCheckResourceAttr(resourceName, "development.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "development.0.use_mainbranch", "true"),
+					resource.TestCheckResourceAttr(resourceName, "production.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "production.0.use_mainbranch", "true"),
+					resource.TestCheckResourceAttr(resourceName, "production.0.enabled", "true"),
+				),
+			},
+		},
+	})
+}
+
+func TestAccBitbucketBranchingModel_branchTypes(t *testing.T) {
+	var branchRestriction BranchingModel
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branching_model.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckBitbucketBranchingModelDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchingModelBranchTypesConfig1(testUser, rName),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchingModelExists(resourceName, &branchRestriction),
+					resource.TestCheckResourceAttrPair(resourceName, "repository", "bitbucket_repository.test", "name"),
+					resource.TestCheckResourceAttr(resourceName, "development.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "development.0.use_mainbranch", "true"),
+					resource.TestCheckTypeSetElemNestedAttrs(resourceName, "branch_type.*", map[string]string{
+						"kind":   "feature",
+						"prefix": "test/",
+					}),
+				),
+			},
+		},
+	})
+}
+
 func testAccBitbucketBranchingModelConfig(testUser, rName string) string {
 	return fmt.Sprintf(`
 resource "bitbucket_repository" "test" {
@@ -47,6 +102,69 @@ resource "bitbucket_branching_model" "test" {
   development {
     use_mainbranch = true
   }
+}
+`, testUser, rName)
+}
+
+func testAccBitbucketBranchingModelProdConfig(testUser, rName string) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branching_model" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+
+  development {
+    use_mainbranch = true
+  }
+
+  production {
+    use_mainbranch = true
+	enabled        = true
+  }
+}
+`, testUser, rName)
+}
+
+func testAccBitbucketBranchingModelBranchTypesConfig1(testUser, rName string) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branching_model" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+
+  development {
+    use_mainbranch = true
+  }
+
+  branch_type {
+    enabled = true
+	kind    = "feature"
+	prefix  = "test/"
+  }
+
+  branch_type {
+    enabled = true
+	kind    = "hotfix"
+	prefix  = "hotfix/"
+  }
+ 
+  branch_type {
+    enabled = true
+	kind    = "release"
+	prefix  = "release/"
+  }
+ 
+  branch_type {
+    enabled = true
+	kind    = "bugfix"
+	prefix  = "bugfix/"
+  }   
 }
 `, testUser, rName)
 }
