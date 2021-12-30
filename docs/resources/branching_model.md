@@ -83,3 +83,11 @@ The following arguments are supported:
 * `enabled` - (Optional) Whether the branch type is enabled or not. A disabled branch type may contain an invalid `prefix`.
 * `kind` - (Required) The kind of the branch type. Valid values are `feature`, `bugfix`, `release`, `hotfix`.
 * `prefix` - (Optional) The prefix for this branch type. A branch with this prefix will be classified as per kind. The prefix of an enabled branch type must be a valid branch prefix. Additionally, it cannot be blank, empty or null. The prefix for a disabled branch type can be empty or invalid.
+
+## Import
+
+Branching Models can be imported using the owner and repo seperated by a (`/`), e.g.,
+
+```sh
+$ terraform import bitbucket_repository.example owner/repo
+```

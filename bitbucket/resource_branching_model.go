@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -38,6 +39,9 @@ func resourceBranchingModel() *schema.Resource {
 		Read:   resourceBranchingModelsRead,
 		Update: resourceBranchingModelsPut,
 		Delete: resourceBranchingModelsDelete,
+		Importer: &schema.ResourceImporter{
+			State: schema.ImportStatePassthrough,
+		},
 
 		Schema: map[string]*schema.Schema{
 			"owner": {
@@ -53,6 +57,7 @@ func resourceBranchingModel() *schema.Resource {
 			"branch_type": {
 				Type:     schema.TypeSet,
 				Optional: true,
+				Computed: true,
 				MaxItems: 4,
 				Elem: &schema.Resource{
 					Schema: map[string]*schema.Schema{
@@ -169,10 +174,11 @@ func resourceBranchingModelsPut(d *schema.ResourceData, m interface{}) error {
 func resourceBranchingModelsRead(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Client)
 
-	branchingModelsReq, _ := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/branching-model",
-		d.Get("owner").(string),
-		d.Get("repository").(string),
-	))
+	owner, repo, err := branchingModelId(d.Id())
+	if err != nil {
+		return err
+	}
+	branchingModelsReq, _ := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/branching-model", owner, repo))
 
 	if branchingModelsReq.StatusCode == 404 {
 		log.Printf("[WARN] Branching Model (%s) not found, removing from state", d.Id())
@@ -199,6 +205,8 @@ func resourceBranchingModelsRead(d *schema.ResourceData, m interface{}) error {
 
 	log.Printf("[DEBUG] Branching Model Response Decoded: %#v", branchingModel)
 
+	d.Set("owner", owner)
+	d.Set("repository", repo)
 	d.Set("development", flattenBranchModel(branchingModel.Development, "development"))
 	d.Set("branch_type", flattenBranchTypes(branchingModel.BranchTypes))
 	d.Set("production", flattenBranchModel(branchingModel.Production, "production"))
@@ -208,10 +216,13 @@ func resourceBranchingModelsRead(d *schema.ResourceData, m interface{}) error {
 
 func resourceBranchingModelsDelete(d *schema.ResourceData, m interface{}) error {
 	client := m.(*Client)
-	_, err := client.Put(fmt.Sprintf("2.0/repositories/%s/%s/branching-model/settings",
-		d.Get("owner").(string),
-		d.Get("repository").(string),
-	), nil)
+
+	owner, repo, err := branchingModelId(d.Id())
+	if err != nil {
+		return err
+	}
+
+	_, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s/branching-model/settings", owner, repo), nil)
 
 	if err != nil {
 		return err
@@ -348,4 +359,14 @@ func flattenBranchTypes(branchTypes []*BranchType) []interface{} {
 	}
 
 	return tfList
+}
+
+func branchingModelId(id string) (string, string, error) {
+	parts := strings.Split(id, "/")
+
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("Unexpected format of ID (%q), expected OWNER/REPOSITORY", id)
+	}
+
+	return parts[0], parts[1], nil
 }

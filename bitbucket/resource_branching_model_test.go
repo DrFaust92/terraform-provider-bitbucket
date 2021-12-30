@@ -30,6 +30,11 @@ func TestAccBitbucketBranchingModel_basic(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "development.0.use_mainbranch", "true"),
 				),
 			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
 		},
 	})
 }
@@ -56,6 +61,11 @@ func TestAccBitbucketBranchingModel_production(t *testing.T) {
 					resource.TestCheckResourceAttr(resourceName, "production.0.use_mainbranch", "true"),
 					resource.TestCheckResourceAttr(resourceName, "production.0.enabled", "true"),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
@@ -84,6 +94,11 @@ func TestAccBitbucketBranchingModel_branchTypes(t *testing.T) {
 						"prefix": "test/",
 					}),
 				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
 			},
 		},
 	})
