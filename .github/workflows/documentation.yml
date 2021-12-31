@@ -64,4 +64,4 @@ jobs:
           path: ~/go/pkg/mod
           key: ${{ runner.os }}-go-pkg-mod-${{ hashFiles('go.sum') }}
       - run: go install github.com/katbyte/terrafmt
-      - run: terrafmt diff ./website --check --pattern '*.markdown'      
+      - run: terrafmt diff ./docs --check --pattern '*.md'      
