@@ -79,7 +79,7 @@ func resourceDeploymentVariableCreate(d *schema.ResourceData, m interface{}) err
 	d.Set("uuid", rvRes.Uuid)
 	d.SetId(rvRes.Uuid)
 
-	time.Sleep(5000 * time.Millisecond) // sleep for a while, to allow BitBucket cache to catch up
+	time.Sleep(20000 * time.Millisecond) // sleep for a while, to allow BitBucket cache to catch up
 	return resourceDeploymentVariableRead(d, m)
 }
 
