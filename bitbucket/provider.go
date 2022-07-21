@@ -63,6 +63,7 @@ func Provider() *schema.Provider {
 			"bitbucket_ssh_key":                 resourceSshKey(),
 			"bitbucket_branch_restriction":      resourceBranchRestriction(),
 			"bitbucket_branching_model":         resourceBranchingModel(),
+			"bitbucket_branch":                  resourceBranch(),
 			"bitbucket_deployment":              resourceDeployment(),
 			"bitbucket_deployment_variable":     resourceDeploymentVariable(),
 			"bitbucket_workspace_hook":          resourceWorkspaceHook(),

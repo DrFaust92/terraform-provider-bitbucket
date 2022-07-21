@@ -86,7 +86,7 @@ func dataReadProjects(d *schema.ResourceData, m interface{}) error {
 
 	for {
 		projRes, res, err := workspaceApi.WorkspacesWorkspaceProjectsGet(c.AuthContext, owner, next)
-	
+
 		if err != nil {
 			return fmt.Errorf("error reading projects (%s): %w", d.Id(), err)
 		}
@@ -109,15 +109,14 @@ func dataReadProjects(d *schema.ResourceData, m interface{}) error {
 
 	for _, x := range projects {
 		_projects = append(_projects, map[string]interface{}{
-			"key":       x.Key,
-			"is_private": x.IsPrivate,
-			"name": x.Name,
-			"description": x.Description,
+			"key":                        x.Key,
+			"is_private":                 x.IsPrivate,
+			"name":                       x.Name,
+			"description":                x.Description,
 			"has_publicly_visible_repos": x.HasPubliclyVisibleRepos,
-			"uuid": x.Uuid,
+			"uuid":                       x.Uuid,
 		})
 	}
-	
 
 	d.Set("projects", _projects)
 	d.SetId(owner)
