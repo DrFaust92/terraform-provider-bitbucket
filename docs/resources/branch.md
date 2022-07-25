@@ -20,12 +20,12 @@ description: |-
 - `branch_name` (String)
 - `owner` (String)
 - `repo_slug` (String)
+- `target` (String)
 
 ### Optional
 
 - `default_merge_strategy` (String)
 - `merge_strategies` (List of String)
-- `target` (String)
 
 ### Read-Only
 
