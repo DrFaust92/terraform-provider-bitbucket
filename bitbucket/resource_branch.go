@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/migara/bitbucket-go-client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
+	"github.com/migara/bitbucket-go-client"
 )
 
 func resourceBranch() *schema.Resource {
@@ -43,8 +43,7 @@ func resourceBranch() *schema.Resource {
 			},
 			"target": {
 				Type:     schema.TypeString,
-				Optional: true,
-				Default:  "default",
+				Required: true,
 			},
 			"default_merge_strategy": {
 				Type:     schema.TypeString,
