@@ -57,11 +57,11 @@ func dataReadDeployment(ctx context.Context, d *schema.ResourceData, m interface
 	}
 
 	if res.StatusCode == http.StatusNotFound {
-		return diag.Errorf("user not found")
+		return diag.Errorf("deployment not found")
 	}
 
 	if res.StatusCode >= http.StatusInternalServerError {
-		return diag.Errorf("internal server error fetching user")
+		return diag.Errorf("internal server error fetching deployment")
 	}
 
 	var deploy Deployment
