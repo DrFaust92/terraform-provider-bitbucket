@@ -77,6 +77,11 @@ func resourceRepository() *schema.Resource {
 				Default:      "allow_forks",
 				ValidateFunc: validation.StringInSlice([]string{"allow_forks", "no_public_forks", "no_forks"}, false),
 			},
+			"mainbranch": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
+			},
 			"language": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -171,6 +176,13 @@ func newRepositoryFromResource(d *schema.ResourceData) *bitbucket.Repository {
 			Key: v.(string),
 		}
 		repo.Project = project
+	}
+
+	if v, ok := d.GetOk("mainbranch"); ok && v.(string) != "" {
+		mainbranch := &bitbucket.Branch{
+			Name: v.(string),
+		}
+		repo.Mainbranch = mainbranch
 	}
 
 	return repo
@@ -364,6 +376,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	d.Set("slug", repoRes.Slug)
 	d.Set("language", repoRes.Language)
 	d.Set("fork_policy", repoRes.ForkPolicy)
+	d.Set("mainbranch", repoRes.Mainbranch.Name)
 	// d.Set("website", repoRes.Website)
 	d.Set("description", repoRes.Description)
 	d.Set("project_key", repoRes.Project.Key)
