@@ -160,7 +160,7 @@ func resourceProjectBranchingModelsRead(ctx context.Context, d *schema.ResourceD
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	branchingModelsReq, _ := client.Get(fmt.Sprintf("2.0/workspaces/%s/projects/%s/branching-model", workspace, repo))
+	branchingModelsReq, _ := client.Get(fmt.Sprintf("2.0/workspaces/%s/projects/%s/branching-model/settings", workspace, repo))
 
 	if branchingModelsReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Project Branching Model (%s) not found, removing from state", d.Id())
