@@ -106,6 +106,7 @@ func Provider() *schema.Provider {
 			"bitbucket_ip_ranges":                 dataIPRanges(),
 			"bitbucket_pipeline_oidc_config":      dataPipelineOidcConfig(),
 			"bitbucket_pipeline_oidc_config_keys": dataPipelineOidcConfigKeys(),
+			"bitbucket_repository":                dataRepository(),
 			"bitbucket_user":                      dataUser(),
 			"bitbucket_workspace":                 dataWorkspace(),
 			"bitbucket_workspace_members":         dataWorkspaceMembers(),
