@@ -91,7 +91,7 @@ func resourceSshKeysRead(ctx context.Context, d *schema.ResourceData, m interfac
 
 	sshKeyReq, res, err := sshApi.UsersSelectedUserSshKeysKeyIdGet(c.AuthContext, keyId, user)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] SSH Key (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

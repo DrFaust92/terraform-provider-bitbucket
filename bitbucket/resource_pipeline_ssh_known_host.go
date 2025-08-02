@@ -121,7 +121,7 @@ func resourcePipelineSshKnownHostsRead(ctx context.Context, d *schema.ResourceDa
 
 	host, res, err := pipeApi.GetRepositoryPipelineKnownHost(c.AuthContext, workspace, repo, uuid)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Pipeline Ssh known host (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
