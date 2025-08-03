@@ -105,7 +105,7 @@ func resourceRepositoryVariableRead(ctx context.Context, d *schema.ResourceData,
 
 	rvRes, res, err := pipeApi.GetRepositoryPipelineVariable(c.AuthContext, workspace, repoSlug, d.Get("uuid").(string))
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Repository Variable (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

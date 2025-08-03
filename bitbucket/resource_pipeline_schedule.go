@@ -150,7 +150,7 @@ func resourcePipelineScheduleRead(ctx context.Context, d *schema.ResourceData, m
 
 	schedule, res, err := pipeApi.GetRepositoryPipelineSchedule(c.AuthContext, workspace, repo, uuid)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Pipeline Schedule (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

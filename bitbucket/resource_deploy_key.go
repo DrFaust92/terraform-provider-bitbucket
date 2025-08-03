@@ -107,7 +107,7 @@ func resourceDeployKeysRead(ctx context.Context, d *schema.ResourceData, m inter
 
 	deployKey, res, err := deployApi.RepositoriesWorkspaceRepoSlugDeployKeysKeyIdGet(c.AuthContext, keyId, repo, workspace)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Deploy Key (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

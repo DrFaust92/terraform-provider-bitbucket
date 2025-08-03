@@ -198,7 +198,7 @@ func resourceProjectRead(ctx context.Context, d *schema.ResourceData, m interfac
 
 	projRes, res, err := projectApi.WorkspacesWorkspaceProjectsProjectKeyGet(c.AuthContext, projectKey, d.Get("owner").(string))
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Project (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

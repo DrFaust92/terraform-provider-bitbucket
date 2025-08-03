@@ -75,7 +75,7 @@ func resourcePipelineSshKeysRead(ctx context.Context, d *schema.ResourceData, m 
 
 	key, res, err := pipeApi.GetRepositoryPipelineSshKeyPair(c.AuthContext, workspace, repo)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Pipeline Ssh Key (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
