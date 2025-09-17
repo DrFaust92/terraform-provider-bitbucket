@@ -267,7 +267,7 @@ func resourceForkedRepositoryRead(ctx context.Context, d *schema.ResourceData, m
 
 	repoRes, res, err := repoApi.RepositoriesWorkspaceRepoSlugGet(c.AuthContext, repoSlug, workspace)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Repository (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

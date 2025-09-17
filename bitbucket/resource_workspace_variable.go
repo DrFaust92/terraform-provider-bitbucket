@@ -98,7 +98,7 @@ func resourceWorkspaceVariableRead(ctx context.Context, d *schema.ResourceData, 
 
 	log.Printf("[DEBUG] Workspace Variable Get Request Res: %#v", res)
 
-	if res.StatusCode == http.StatusNotFound {
+	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Workspace Variable (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
