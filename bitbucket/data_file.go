@@ -331,7 +331,7 @@ func dataFileRead(ctx context.Context, d *schema.ResourceData, m interface{}) di
 func processJson(fileBody []byte, contentType string, include_commit bool, include_commit_links bool, include_links bool) (interface{}, error) {
 
 	if fileBody == nil {
-		return nil, fmt.Errorf("missing response body.")
+		return nil, fmt.Errorf("missing response body")
 	}
 	var fileValue FileValue
 	err := fileValue.decode(fileBody, contentType)
