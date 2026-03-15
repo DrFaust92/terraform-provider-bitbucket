@@ -16,10 +16,17 @@ Use the navigation to the left to read about the available resources.
 ## Example Usage
 
 ```hcl
-# Configure the Bitbucket Provider
+# Configure the Bitbucket Provider using OAuth (recommended)
 provider "bitbucket" {
-  username = "GobBluthe"
-  password = "idoillusions" # you can also use app passwords
+  oauth_client_id     = "my-oauth-client-id"
+  oauth_client_secret = "my-oauth-client-secret"
+}
+
+# Alternatively, using Basic Auth with an API token
+# Note: Bitbucket App Passwords are deprecated - use an API token with your Atlassian account email
+provider "bitbucket" {
+  username = "gob@bluth.example.com" # Atlassian account email
+  password = "ATATT3x..."            # API token from https://id.atlassian.com/manage-profile/security/api-tokens
 }
 
 resource "bitbucket_repository" "illusions" {
@@ -43,16 +50,17 @@ The following arguments are supported in the `provider` block:
 
 * `username` - (Optional) Username to use for authentication via [Basic
   Auth](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#basic-auth).
+  When using an API token, this must be your **Atlassian account email address**.
   You can also set this via the `BITBUCKET_USERNAME` environment variable.
   If configured, requires `password` to be configured as well.
 
 * `password` - (Optional) Password to use for authentication via [Basic
   Auth](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#basic-auth).
-  Please note that this has to be an [App
-  Password](https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/)
-  that has to be created in the [Account
-  Settings](https://bitbucket.org/account/settings/app-passwords/). You can
-  also set this via the `BITBUCKET_PASSWORD` environment variable. If
+  It is recommended to use an [API Token](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
+  created at [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
+  as your password, with your Atlassian account email as the username.
+  **Note:** Bitbucket App Passwords are deprecated and will stop working on June 9, 2026.
+  You can also set this via the `BITBUCKET_PASSWORD` environment variable. If
   configured, requires `username` to be configured as well.
 
 * `oauth_client_id` - (Optional) OAuth client ID to use for authentication via
@@ -74,15 +82,13 @@ The following arguments are supported in the `provider` block:
 
 ## OAuth2 Scopes
 
-To interacte with the Bitbucket API, an [App
-Password](https://support.atlassian.com/bitbucket-cloud/docs/app-passwords/) or
-[OAuth Client
-Credentials](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
+To interact with the Bitbucket API, an [API Token](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
+or [OAuth Client Credentials](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
 are required.
 
-App passwords and OAuth client credentials are limited in scope, each API
+API tokens and OAuth client credentials are limited in scope, each API
 requires certain scope to interact with, each resource doc will specify what
-are the scopes required to use that resource.
+scopes are required to use that resource.
 
 See the [Bitbucket OAuth
 Documentation](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
