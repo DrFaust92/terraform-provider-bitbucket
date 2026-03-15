@@ -13,7 +13,7 @@ Provides a Bitbucket Repository User Permission Resource.
 This allows you set explicit user permission for a project.
 
 * OAuth2 Scopes: `project:admin`
-* API token permissions: `read:project:bitbucket`, `admin:project:bitbucket` `write:permission:bitbucket`, and `delete:permission:bitbucket`
+* API token permissions: `read:project:bitbucket`, `admin:project:bitbucket`, `write:permission:bitbucket`, and `delete:permission:bitbucket`
 
 ## Example Usage
 
