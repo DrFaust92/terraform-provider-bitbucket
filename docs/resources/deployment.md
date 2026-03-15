@@ -11,7 +11,8 @@ description: |-
 
 This resource allows you to setup pipelines deployment environments.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `pipeline`
+* API token permissions: `read:pipeline:bitbucket` and `admin:pipeline:bitbucket`
 
 ## Example Usage
 

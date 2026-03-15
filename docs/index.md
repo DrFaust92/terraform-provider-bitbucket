@@ -23,7 +23,7 @@ provider "bitbucket" {
 }
 
 # Alternatively, using Basic Auth with an API token
-# Note: Bitbucket App Passwords are deprecated - use an API token with your Atlassian account email
+# Note: Bitbucket App Passwords are deprecated - use an API token with your Atlassian account email instead
 provider "bitbucket" {
   username = "gob@bluth.example.com" # Atlassian account email
   password = "ATATT3x..."            # API token from https://id.atlassian.com/manage-profile/security/api-tokens
@@ -56,7 +56,7 @@ The following arguments are supported in the `provider` block:
 
 * `password` - (Optional) Password to use for authentication via [Basic
   Auth](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#basic-auth).
-  It is recommended to use an [API Token](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
+  It is recommended to use an [API Token](https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/)
   created at [Atlassian Account Settings](https://id.atlassian.com/manage-profile/security/api-tokens)
   as your password, with your Atlassian account email as the username.
   **Note:** Bitbucket App Passwords are deprecated and will stop working on June 9, 2026.
@@ -80,16 +80,15 @@ The following arguments are supported in the `provider` block:
   [OAuth](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#oauth-2-0).
   You can also set this via the `BITBUCKET_OAUTH_TOKEN` environment variable.
 
-## OAuth2 Scopes
+## Permission Scopes
 
-To interact with the Bitbucket API, an [API Token](https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/)
+To interact with the Bitbucket API, an [API Token](https://support.atlassian.com/bitbucket-cloud/docs/api-tokens/)
 or [OAuth Client Credentials](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
 are required.
 
 API tokens and OAuth client credentials are limited in scope, each API
 requires certain scope to interact with, each resource doc will specify what
-scopes are required to use that resource.
+scopes are required to use that resource:
 
-See the [Bitbucket OAuth
-Documentation](https://support.atlassian.com/bitbucket-cloud/docs/use-oauth-on-bitbucket-cloud/)
-for more information on scopes.
+* [OAuth 2.0 scopes](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#bitbucket-oauth-2-0-scopes)
+* [API token permissions](https://support.atlassian.com/bitbucket-cloud/docs/api-token-permissions/)

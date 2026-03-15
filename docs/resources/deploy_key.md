@@ -12,14 +12,15 @@ Provides a Bitbucket Deploy Key resource.
 
 This allows you to manage your Deploy Keys for a repository.
 
-OAuth2 Scopes: `repository` and `repository:admin`
+* OAuth2 Scopes: `repository` and `repository:admin`
+* API token permissions: `admin:repository:bitbucket` and `write:ssh-key:bitbucket`
 
 ## Example Usage
 
 ```hcl
 resource "bitbucket_deploy_key" "test" {
   workspace  = "example"
-  repository = "example"  
+  repository = "example"
   key        = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKqP3Cr632C2dNhhgKVcon4ldUSAeKiku2yP9O9/bDtY"
   label      = "test-key"
 }

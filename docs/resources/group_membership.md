@@ -12,6 +12,9 @@ Provides a Bitbucket group membership resource.
 
 This allows you to manage your group membership.
 
+* OAuth2 Scopes: `account:write`
+* API token permissions: `read:permission:bitbucket` and `write:permission:bitbucket`
+
 ## Example Usage
 
 ```hcl

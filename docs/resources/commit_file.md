@@ -12,7 +12,8 @@ Commit a file.
 
 This resource allows you to create a commit within a Bitbucket repository.
 
-OAuth2 Scopes: `repository:write`
+* OAuth2 Scopes: `repository:write`
+* API token permissions: `write:repository:bitbucket`
 
 ## Example Usage
 

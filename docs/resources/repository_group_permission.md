@@ -12,7 +12,8 @@ Provides a Bitbucket Repository Group Permission Resource.
 
 This allows you set explicit group permission for a repository.
 
-OAuth2 Scopes: `repository:admin`
+* OAuth2 Scopes: `repository:admin`
+* API token permissions: `read:project:bitbucket`, `admin:project:bitbucket`, `write:permission:bitbucket`, and `delete:permission:bitbucket`
 
 Note: can only be used when authenticating with Bitbucket Cloud using an _app password_. Authenticating via an OAuth flow gives a 403 error due to a [restriction in the Bitbucket Cloud API](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-repositories/#api-repositories-workspace-repo-slug-permissions-config-groups-group-slug-put).
 

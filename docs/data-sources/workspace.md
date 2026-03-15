@@ -10,7 +10,8 @@ description: |-
 
 Provides a way to fetch data on a workspace.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `none`
+* API token permissions: `read:workspace:bitbucket`
 
 ## Example Usage
 

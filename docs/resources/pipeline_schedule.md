@@ -12,7 +12,8 @@ Provides a Bitbucket Pipeline Schedule resource.
 
 This allows you to manage your Pipeline Schedules for a repository.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `pipeline` and `pipeline:write`
+* API token permissions: `read:pipeline:bitbucket` and `write:pipeline:bitbucket`
 
 ## Example Usage
 

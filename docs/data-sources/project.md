@@ -10,7 +10,8 @@ description: |-
 
 Datasource to retrieve project information
 
-OAuth2 Scopes: `project`
+* OAuth2 Scopes: `project`
+* API token permissions: `read:project:bitbucket`
 
 ## Example Usage
 

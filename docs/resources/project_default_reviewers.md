@@ -10,7 +10,8 @@ description: |-
 
 Provides support for setting up default reviewers for your project. You must however have the UUID of the user available. Since Bitbucket has removed usernames from its APIs the best case is to use the UUID via the data provider.
 
-OAuth2 Scopes: `project:admin`
+* OAuth2 Scopes: `project:admin`
+* API token permissions: `read:pullrequest:bitbucket` and `admin:project:bitbucket`
 
 ## Example Usage
 

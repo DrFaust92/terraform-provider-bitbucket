@@ -10,7 +10,8 @@ description: |-
 
 Provides a way to fetch data of hook types.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `webhook`
+* API token permissions: `read:webhook:bitbucket`
 
 ## Example Usage
 
