@@ -10,7 +10,8 @@ description: |-
 
 Datasource to retrieve repository information
 
-OAuth2 Scopes: `repository`
+* OAuth2 Scopes: `repository`
+* API token permissions: `read:repository:bitbucket`
 
 ## Example Usage
 

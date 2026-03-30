@@ -10,7 +10,8 @@ description: |-
 
 Datasource to retrieve file content or metadata information
 
-OAuth2 Scopes: `repository`
+* OAuth2 Scopes: `repository`
+* API token permissions: `read:repository:bitbucket`
 
 ## Example Usage
 
@@ -31,7 +32,7 @@ data "bitbucket_file" "test" {
 	path = "path/to/my/doc.py"
 }
 
-# Basic example (using UUIDs and commit hash) returns file contents 
+# Basic example (using UUIDs and commit hash) returns file contents
 data "bitbucket_file" "test" {
 	workspace = "{f772f004-c268-4698-b49f-9d8415981464}"
 	repo_slug = "{2c3a2eee-fa63-4b60-afd4-97319245e79e}"

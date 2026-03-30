@@ -3,16 +3,17 @@ layout: "bitbucket"
 page_title: "Bitbucket: bitbucket_pipeline_ssh_known_host"
 sidebar_current: "docs-bitbucket-resource-pipeline-ssh-known-host"
 description: |-
-  Provides a Bitbucket Pipeline Ssh Known Host
+  Provides a Bitbucket Pipeline SSH Known Host
 ---
 
 # bitbucket\_pipeline\_ssh\_known_host
 
-Provides a Bitbucket Pipeline Ssh Known Host resource.
+Provides a Bitbucket Pipeline SSH Known Host resource.
 
-This allows you to manage your Pipeline Ssh Known Hosts for a repository.
+This allows you to manage your Pipeline SSH Known Hosts for a repository.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `pipeline` and `pipeline:variable`
+* API token permissions: `read:pipeline:bitbucket` and `admin:pipeline:bitbucket`
 
 ## Example Usage
 
@@ -23,7 +24,7 @@ resource "bitbucket_pipeline_ssh_known_host" "test" {
   hostname   = "[example.com]:22"
 
   public_key {
-    key_type = "ssh-ed25519" 
+    key_type = "ssh-ed25519"
     key      = "AAAAC3NzaC1lZDI1NTE5AAAAIKqP3Cr632C2dNhhgKVcon4ldUSAeKiku2yP9O9/bDtY"
   }
 }
@@ -51,7 +52,7 @@ The following arguments are supported:
 
 ## Import
 
-Pipeline Ssh Known Hosts can be imported using their `workspace/repo-slug/uuid` ID, e.g.
+Pipeline SSH Known Hosts can be imported using their `workspace/repo-slug/uuid` ID, e.g.
 
 ```sh
 terraform import bitbucket_pipeline_ssh_known_host.key workspace/repo-slug/uuid

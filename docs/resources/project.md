@@ -11,7 +11,8 @@ description: |-
 
 This resource allows you to manage your projects in your bitbucket team.
 
-OAuth2 Scopes: `project` and `project:admin`
+* OAuth2 Scopes: `project` and `project:admin`
+* API token permissions: `read:project:bitbucket` and `admin:project:bitbucket`
 
 ## Example Usage
 

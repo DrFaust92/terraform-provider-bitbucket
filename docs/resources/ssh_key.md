@@ -12,7 +12,8 @@ Provides a Bitbucket SSH Key resource.
 
 This allows you to manage your SSH Keys for a user.
 
-OAuth2 Scopes: `account` and `account:write`
+* OAuth2 Scopes: `account` and `account:write`
+* API token permissions: `read:ssh-key:bitbucket`, `write:ssh-key:bitbucket`, and `delete:ssh-key:bitbucket`
 
 ## Example Usage
 

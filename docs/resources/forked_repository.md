@@ -15,7 +15,8 @@ private, how to fork the repository and other options. SCM cannot be overridden,
 as it is inherited from the parent repository. Creation will fail if the parent
 repo has `no_forks` as its fork policy.
 
-OAuth2 Scopes: `repository`, `repository:admin`, and `repository:delete`
+* OAuth2 Scopes: `repository`, `repository:admin`, and `repository:delete`
+* API token permissions: `read:repository:bitbucket`, `write:repository:bitbucket`, and `admin:repository:bitbucket`
 
 ## Example Usage
 
@@ -34,7 +35,7 @@ resource "bitbucket_forked_repository" "infrastructure" {
   owner = "myteam"
   name  = "TerraformCode"
   slug  = "terraform-code"
-  
+
   parent = {
     owner = bitbucket_repository.test.owner
     slug  = bitbucket_repository.test.slug

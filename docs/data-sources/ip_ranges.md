@@ -10,7 +10,8 @@ description: |-
 
 Provides a way to fetch IP Ranges for whitelisting.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `none`
+* API token permissions: `none`
 
 ## Example Usage
 

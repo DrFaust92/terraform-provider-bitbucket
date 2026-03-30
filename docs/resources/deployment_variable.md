@@ -11,7 +11,8 @@ description: |-
 
 This resource allows you to configure deployment variables.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `pipeline:variable`
+* API token permissions: `read:pipeline:bitbucket` and `admin:pipeline:bitbucket`
 
 ## Example Usage
 

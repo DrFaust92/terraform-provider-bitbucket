@@ -10,6 +10,9 @@ description: |-
 
 Provides a way to fetch data on a user.
 
+* OAuth2 Scopes: `account`
+* API token permissions: `read:user:bitbucket`
+
 ## Example Usage
 
 ```hcl

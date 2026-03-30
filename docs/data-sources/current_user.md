@@ -10,7 +10,8 @@ description: |-
 
 Provides a way to fetch data of the current user.
 
-OAuth2 Scopes: `account`
+* OAuth2 Scopes: `account`
+* API token permissions: `read:user:bitbucket`
 
 ## Example Usage
 

@@ -10,10 +10,11 @@ description: |-
 
 Provides a Bitbucket repository resource.
 
-This resource allows you manage your repositories such as scm type, if it is
+This resource allows you manage your repositories such as SCM type, if it is
 private, how to fork the repository and other options.
 
-OAuth2 Scopes: `repository`, `repository:admin`, and `repository:delete`
+* OAuth2 Scopes: `repository`, `repository:admin`, and `repository:delete`
+* API token permissions: `read:repository:bitbucket`, `admin:repository:bitbucket`, and `delete:repository:bitbucket`
 
 ## Example Usage
 

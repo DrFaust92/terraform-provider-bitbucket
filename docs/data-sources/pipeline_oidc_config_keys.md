@@ -10,7 +10,8 @@ description: |-
 
 Provides a way to fetch data on a pipeline OIDC Config Keys.
 
-OAuth2 Scopes: `none`
+* OAuth2 Scopes: `pipeline`
+* API token permissions: `read:pipeline:bitbucket`
 
 ## Example Usage
 

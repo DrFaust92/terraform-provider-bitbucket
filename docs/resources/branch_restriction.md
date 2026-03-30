@@ -12,7 +12,8 @@ Provides a Bitbucket branch restriction resource.
 
 This allows you for setting up branch restrictions for your repository.
 
-OAuth2 Scopes: `repository:admin`
+* OAuth2 Scopes: `repository:admin`
+* API token permissions: `read:repository:bitbucket` and `admin:repository:bitbucket`
 
 ## Example Usage
 
@@ -23,7 +24,7 @@ resource "bitbucket_branch_restriction" "master" {
 
   kind = "push"
   pattern = "master"
-  
+
   users = [ "my-bitbucket-username" ]
 
   groups {

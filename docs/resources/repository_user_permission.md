@@ -12,7 +12,8 @@ Provides a Bitbucket Repository User Permission Resource.
 
 This allows you set explicit user permission for a repository.
 
-OAuth2 Scopes: `repository:admin`
+* OAuth2 Scopes: `repository:admin`
+* API token permissions: `read:repository:bitbucket`, `admin:repository:bitbucket`, `write:permission:bitbucket`, and `delete:permission:bitbucket`
 
 ## Example Usage
 

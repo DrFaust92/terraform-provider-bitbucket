@@ -12,7 +12,8 @@ Provides a Bitbucket hook resource.
 
 This allows you to manage your webhooks on a repository.
 
-OAuth2 Scopes: `webhook`
+* OAuth2 Scopes: `webhook`
+* API token permissions: `read:webhook:bitbucket`, `write:webhook:bitbucket`, and `delete:webhook:bitbucket`
 
 ## Example Usage
 

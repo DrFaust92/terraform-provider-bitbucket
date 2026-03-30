@@ -10,6 +10,9 @@ description: |-
 
 Provides a way to fetch data of groups in a workspace.
 
+* OAuth2 Scopes: `account`
+* API token permissions: `read:permission:bitbucket`
+
 ## Example Usage
 
 ```hcl

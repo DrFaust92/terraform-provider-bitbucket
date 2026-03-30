@@ -12,7 +12,8 @@ Provides a Bitbucket project branching model resource.
 
 This allows you for setting up branching models for your project.
 
-OAuth2 Scopes: `project:admin`
+* OAuth2 Scopes: `project:admin`
+* API token permissions: `read:repository:bitbucket`, `admin:repository:bitbucket`, and `admin:project:bitbucket`
 
 ## Example Usage
 
@@ -42,18 +43,18 @@ resource "bitbucket_project_branching_model" "example" {
     kind    = "hotfix"
     prefix  = "hotfix/"
   }
- 
+
   branch_type {
     enabled = true
     kind    = "release"
     prefix  = "release/"
   }
- 
+
   branch_type {
     enabled = true
     kind    = "bugfix"
     prefix  = "bugfix/"
-  }   
+  }
 }
 ```
 
