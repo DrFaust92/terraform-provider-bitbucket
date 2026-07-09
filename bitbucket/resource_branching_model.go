@@ -20,7 +20,7 @@ type BranchingModel struct {
 	Development           *BranchModel  `json:"development,omitempty"`
 	Production            *BranchModel  `json:"production,omitempty"`
 	BranchTypes           []*BranchType `json:"branch_types"`
-	DefaultBranchDeletion *bool         `json:"default_branch_deletion,omitempty"`
+	DefaultBranchDeletion *FlexBool `json:"default_branch_deletion,omitempty"`
 }
 
 type BranchModel struct {
@@ -226,7 +226,7 @@ func resourceBranchingModelsRead(ctx context.Context, d *schema.ResourceData, m 
 
 	d.Set("owner", owner)
 	d.Set("repository", repo)
-	d.Set("default_branch_deletion", branchingModel.DefaultBranchDeletion)
+	d.Set("default_branch_deletion", branchingModel.DefaultBranchDeletion.BoolPtr())
 	d.Set("development", flattenBranchModel(branchingModel.Development, "development"))
 	d.Set("branch_type", flattenBranchTypes(branchingModel.BranchTypes))
 	d.Set("production", flattenBranchModel(branchingModel.Production, "production"))
@@ -270,7 +270,8 @@ func expandBranchingModel(d *schema.ResourceData) *BranchingModel {
 
 	//nolint:staticcheck
 	if v, ok := d.GetOkExists("default_branch_deletion"); ok {
-		model.DefaultBranchDeletion = v.(*bool)
+		val := v.(bool)
+		model.DefaultBranchDeletion = &FlexBool{Value: &val}
 	}
 
 	return model
