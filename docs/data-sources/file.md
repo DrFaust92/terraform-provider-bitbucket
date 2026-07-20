@@ -85,74 +85,74 @@ data "bitbucket_file" "test" {
 
 The following arguments are supported:
 
-- `commit` - (Required) Commit hash or branch name
-- `path` - (Required) Path to file (starting from commit)
-- `repo_slug` - (Required) Repo slug or UUID
-- `workspace` - (Required) Workspace slug or UUID
-- `format` - Format if file to return: content/base64 content or metadata.
-- `include_commit` (Boolean) Whether to include the commit for the file metadata or not.
-- `include_commit_links` (Boolean) Whether to include the commit links for the file metadata or not.
-- `include_links` (Boolean) Whether to include the links for the file metadata or not.
+* `commit` - (Required) Commit hash or branch name
+* `path` - (Required) Path to file (starting from commit)
+* `repo_slug` - (Required) Repo slug or UUID
+* `workspace` - (Required) Workspace slug or UUID
+* `format` - Format if file to return: content/base64 content or metadata.
+* `include_commit` (Boolean) Whether to include the commit for the file metadata or not.
+* `include_commit_links` (Boolean) Whether to include the commit links for the file metadata or not.
+* `include_links` (Boolean) Whether to include the links for the file metadata or not.
 
 ## Attributes Reference
 
-- `content` - Raw string content of path return (not escaped).
-- `content_b64` - Base64-encoded version of path return, safe for embedding.
-- `id` - The ID of this resource.
-- `metadata` (List of Object) Parsed metadata of path (JSON/XML), if available (see [below for nested schema](#nestedatt--metadata))
+* `content` - Raw string content of path return (not escaped).
+* `content_b64` - Base64-encoded version of path return, safe for embedding.
+* `id` - The ID of this resource.
+* `metadata` (List of Object) Parsed metadata of path (JSON/XML), if available (see [below for nested schema](#nestedatt--metadata))
 
 <a id="nestedatt--metadata"></a>
 ### Nested Schema for `metadata`
 
-- `commit` - commit information (see [below for nested schema](#nestedobjatt--metadata--commit))
-- `escaped_path` - escaped file path
-- `link` - commit link information (see [below for nested schema](#nestedobjatt--metadata--link))
-- `mime_type` - file MIME type
-- `path` - file path
-- `size` - file size
-- `type` - file type
+* `commit` - commit information (see [below for nested schema](#nestedobjatt--metadata--commit))
+* `escaped_path` - escaped file path
+* `link` - commit link information (see [below for nested schema](#nestedobjatt--metadata--link))
+* `mime_type` - file MIME type
+* `path` - file path
+* `size` - file size
+* `type` - file type
 
 <a id="nestedobjatt--metadata--commit"></a>
 ### Nested Schema for `metadata.commit`
 
-- `hash` - Commit hash
-- `link` - Commit links (see [below for nested schema](#nestedobjatt--metadata--commit--link))
-- `type` - Commit type
+* `hash` - Commit hash
+* `link` - Commit links (see [below for nested schema](#nestedobjatt--metadata--commit--link))
+* `type` - Commit type
 
 <a id="nestedobjatt--metadata--commit--link"></a>
 ### Nested Schema for `metadata.commit.link`
 
-- `html` - HTML link (see [below for nested schema](#nestedobjatt--metadata--commit--link--html))
-- `self` - Self link (see [below for nested schema](#nestedobjatt--metadata--commit--link--self))
+* `html` - HTML link (see [below for nested schema](#nestedobjatt--metadata--commit--link--html))
+* `self` - Self link (see [below for nested schema](#nestedobjatt--metadata--commit--link--self))
 
 <a id="nestedobjatt--metadata--commit--link--html"></a>
 ### Nested Schema for `metadata.commit.link.html`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedobjatt--metadata--commit--link--self"></a>
 ### Nested Schema for `metadata.commit.link.self`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedobjatt--metadata--link"></a>
 ### Nested Schema for `metadata.link`
 
-- `history` - File history link (see [below for nested schema](#nestedobjatt--metadata--link--history))
-- `meta` - File metadata link (see [below for nested schema](#nestedobjatt--metadata--link--meta))
-- `self` - File self link (see [below for nested schema](#nestedobjatt--metadata--link--self))
+* `history` - File history link (see [below for nested schema](#nestedobjatt--metadata--link--history))
+* `meta` - File metadata link (see [below for nested schema](#nestedobjatt--metadata--link--meta))
+* `self` - File self link (see [below for nested schema](#nestedobjatt--metadata--link--self))
 
 <a id="nestedobjatt--metadata--link--history"></a>
 ### Nested Schema for `metadata.link.history`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedobjatt--metadata--link--meta"></a>
 ### Nested Schema for `metadata.link.meta`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedobjatt--metadata--link--self"></a>
 ### Nested Schema for `metadata.link.self`
 
-- `href` - URL link
+* `href` - URL link

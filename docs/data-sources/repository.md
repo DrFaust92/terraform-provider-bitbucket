@@ -33,50 +33,50 @@ data "bitbucket_repository" "test" {
 
 The following arguments are supported:
 
-- `repo_slug` - (Required) Repository slug or UUID
-- `workspace` - (Required) Workspace slug or UUID
+* `repo_slug` - (Required) Repository slug or UUID
+* `workspace` - (Required) Workspace slug or UUID
 
 ## Attributes Reference
 
-- `is_private` - If repository is private
-- `description` - Repository description
-- `fork_policy` - Repository fork policy
-- `full_name` - Repository full name
-- `has_issues` - If repository currently has JIRA issues assigned to it
-- `has_wiki` - Repository has a Confluence page
-- `id` - The ID of this resource.
-- `language` - Repository language
-- `link` Repository links (see [below for nested schema](#nestedblock--link))
-- `main_branch` - Main branch name
-- `name` - Repository name
-- `owner` Repository owner information (see [below for nested schema](#nestedatt--owner))
-- `project` Project information (see [below for nested schema](#nestedblock--project))
-- `scm` - Repository SCM
-- `uuid` - Repository UUID
+* `is_private` - If repository is private
+* `description` - Repository description
+* `fork_policy` - Repository fork policy
+* `full_name` - Repository full name
+* `has_issues` - If repository currently has JIRA issues assigned to it
+* `has_wiki` - Repository has a Confluence page
+* `id` - The ID of this resource.
+* `language` - Repository language
+* `link` Repository links (see [below for nested schema](#nestedblock--link))
+* `main_branch` - Main branch name
+* `name` - Repository name
+* `owner` Repository owner information (see [below for nested schema](#nestedatt--owner))
+* `project` Project information (see [below for nested schema](#nestedblock--project))
+* `scm` - Repository SCM
+* `uuid` - Repository UUID
 
 <a id="nestedblock--link"></a>
 ### Nested Schema for `link`
 
-- `avatar` - Repository avatar (see [below for nested schema](#nestedatt--link--avatar))
+* `avatar` - Repository avatar (see [below for nested schema](#nestedatt--link--avatar))
 
 <a id="nestedatt--link--avatar"></a>
 ### Nested Schema for `link.avatar`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedatt--owner"></a>
 ### Nested Schema for `owner`
 
-- `display_name` -  Owner display name
-- `username` -  Owner username
-- `uuid` -  Owner UUID
+* `display_name` -  Owner display name
+* `username` -  Owner username
+* `uuid` -  Owner UUID
 
 <a id="nestedblock--project"></a>
 ### Nested Schema for `project`
 
 Read-Only:
 
-- `description` - Project description
-- `is_private` - If project is private
-- `key` - Project key
-- `name` - Project name
+* `description` - Project description
+* `is_private` - If project is private
+* `key` - Project key
+* `name` - Project name
