@@ -76,6 +76,7 @@ func Provider() *schema.Provider {
 			"bitbucket_deployment":                  resourceDeployment(),
 			"bitbucket_deployment_variable":         resourceDeploymentVariable(),
 			"bitbucket_forked_repository":           resourceForkedRepository(),
+			"bitbucket_gpg_key":                     resourceGpgKey(),
 			"bitbucket_group":                       resourceGroup(),
 			"bitbucket_group_membership":            resourceGroupMembership(),
 			"bitbucket_hook":                        resourceHook(),
