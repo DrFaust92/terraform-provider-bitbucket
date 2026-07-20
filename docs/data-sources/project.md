@@ -33,33 +33,33 @@ data "bitbucket_project" "test" {
 
 The following arguments are supported:
 
-- `key` - (Required) Project key
-- `workspace` - (Required) Project workspace slug or {UUID}
-- `description` -  Project description
-- `is_private` -  Project is private
-- `link` - Project link information
+* `key` - (Required) Project key
+* `workspace` - (Required) Project workspace slug or {UUID}
+* `description` -  Project description
+* `is_private` -  Project is private
+* `link` - Project link information
 
 ## Attributes Reference
 
-- `has_publicly_visible_repos` -  Repositories are publicly visible
-- `id` -  The ID of this resource.
-- `name` -  Project name
-- `owner` - Project owner information (see [below for nested schema](#nestedblock--owner))
-- `uuid` -  Project UUID
+* `has_publicly_visible_repos` -  Repositories are publicly visible
+* `id` -  The ID of this resource.
+* `name` -  Project name
+* `owner` - Project owner information (see [below for nested schema](#nestedblock--owner))
+* `uuid` -  Project UUID
 
 <a id="nestedblock--link"></a>
 ### Nested Schema for `link`
 
-- `avatar` - Avatar link information (see [below for nested schema](#nestedblock--link--avatar))
+* `avatar` - Avatar link information (see [below for nested schema](#nestedblock--link--avatar))
 
 <a id="nestedblock--link--avatar"></a>
 ### Nested Schema for `link.avatar`
 
-- `href` - URL link
+* `href` - URL link
 
 <a id="nestedblock--owner"></a>
 ### Nested Schema for `owner`
 
-- `display_name` -  Owner display name
-- `username` -  Owner username
-- `uuid` -  Owner UUID
+* `display_name` -  Owner display name
+* `username` -  Owner username
+* `uuid` -  Owner UUID
