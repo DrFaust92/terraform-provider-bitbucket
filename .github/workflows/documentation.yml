@@ -11,6 +11,9 @@ on:
       - .go-version
       - docs/**
 
+permissions:
+  contents: read
+
 jobs:
   markdown-link-check:
     runs-on: ubuntu-latest

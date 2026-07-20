@@ -2,6 +2,8 @@ name: Go Linter
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+permissions:
+  contents: read
 jobs:
   golangci:
     name: Run linter
