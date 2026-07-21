@@ -7,10 +7,30 @@ import (
 	"os"
 	"testing"
 
+	bitbucket "github.com/DrFaust92/bitbucket-go-client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
+
+func TestFlattenBranchRestrictionUsers(t *testing.T) {
+	users := []bitbucket.Account{
+		{DisplayName: "Jane Doe", Username: "jane"},
+		{DisplayName: "John Smith", Username: "john"},
+	}
+
+	got := flattenBranchRestrictionUsers(users)
+	want := []string{"Jane Doe", "John Smith"}
+
+	if len(got) != len(want) {
+		t.Fatalf("flattenBranchRestrictionUsers() returned %d users, want %d", len(got), len(want))
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("flattenBranchRestrictionUsers()[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
 
 func TestAccBitbucketBranchRestriction_basic(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tf-test")
