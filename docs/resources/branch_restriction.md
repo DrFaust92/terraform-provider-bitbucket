@@ -12,8 +12,8 @@ Provides a Bitbucket branch restriction resource.
 
 This allows you for setting up branch restrictions for your repository.
 
-* OAuth2 Scopes: `repository:admin`
-* API token permissions: `read:repository:bitbucket` and `admin:repository:bitbucket`
+* OAuth2 Scopes: `repository:admin`; using `users` additionally requires `account`
+* API token permissions: `read:repository:bitbucket` and `admin:repository:bitbucket`; using `users` additionally requires `read:workspace:bitbucket`
 
 ## Example Usage
 
@@ -25,7 +25,7 @@ resource "bitbucket_branch_restriction" "master" {
   kind = "push"
   pattern = "master"
 
-  users = [ "my-bitbucket-username" ]
+  users = [ "My Display Name" ]
 
   groups {
     slug = "my-group"
@@ -45,7 +45,7 @@ The following arguments are supported:
 * `branch_match_kind` - (Optional) Indicates how the restriction is matched against a branch. The default is `glob`. Valid values: `branching_model`, `glob`.
 * `branch_type` - (Optional) Apply the restriction to branches of this type. Active when `branch_match_kind` is `branching_model`. The branch type will be calculated using the branching model configured for the repository. Valid values: `feature`, `bugfix`, `release`, `hotfix`, `development`, `production`.
 * `pattern` - (Optional) Apply the restriction to branches that match this pattern. Active when `branch_match_kind` is `glob`. Will be empty when `branch_match_kind` is `branching_model`.
-* `users` - (Optional) A list of users to use.
+* `users` - (Optional) A list of user display names to use. On create and update, each display name is mapped to its workspace member UUID. When the restriction is refreshed or imported, each user account returned by Bitbucket is stored in state using its `display_name`.
 * `groups` - (Optional) A list of groups to use.
 * `value` - (Optional) A value applied to the restriction kind. Currently only applicable to `require_passing_builds_to_merge`, `require_default_reviewer_approvals_to_merge` and `require_approvals_to_merge`.
 

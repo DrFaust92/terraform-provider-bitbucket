@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -136,18 +137,7 @@ func resourceBranchRestriction() *schema.Resource {
 	}
 }
 
-func createBranchRestriction(d *schema.ResourceData) *bitbucket.Branchrestriction {
-
-	users := make([]bitbucket.Account, 0, d.Get("users").(*schema.Set).Len())
-
-	for _, item := range d.Get("users").(*schema.Set).List() {
-		account := bitbucket.Account{
-			Username: item.(string),
-		}
-
-		users = append(users, account)
-	}
-
+func createBranchRestriction(d *schema.ResourceData, users []bitbucket.Account) *bitbucket.Branchrestriction {
 	groups := make([]bitbucket.Group, 0, d.Get("groups").(*schema.Set).Len())
 
 	for _, item := range d.Get("groups").(*schema.Set).List() {
@@ -187,13 +177,59 @@ func createBranchRestriction(d *schema.ResourceData) *bitbucket.Branchrestrictio
 	return restict
 }
 
+func branchRestrictionUsers(c ProviderConfig, workspace string, displayNames *schema.Set) ([]bitbucket.Account, error) {
+	if displayNames.Len() == 0 {
+		return nil, nil
+	}
+
+	workspaceAPI := c.ApiClient.WorkspacesApi
+	memberUUIDs := make(map[string]string)
+	options := bitbucket.WorkspacesApiWorkspacesWorkspaceMembersGetOpts{}
+
+	for {
+		workspaceMembers, res, err := workspaceAPI.WorkspacesWorkspaceMembersGet(c.AuthContext, workspace, &options)
+		if err := handleClientError(res, err); err != nil {
+			return nil, err
+		}
+
+		for _, member := range workspaceMembers.Values {
+			if member.User != nil {
+				memberUUIDs[member.User.DisplayName] = member.User.Uuid
+			}
+		}
+
+		if workspaceMembers.Next == "" {
+			break
+		}
+		options.Page = optional.NewInt32(workspaceMembers.Page + 1)
+	}
+
+	users := make([]bitbucket.Account, 0, displayNames.Len())
+	for _, item := range displayNames.List() {
+		displayName := item.(string)
+		uuid, ok := memberUUIDs[displayName]
+		if !ok {
+			return nil, fmt.Errorf("user not found in workspace %q: %s", workspace, displayName)
+		}
+
+		users = append(users, bitbucket.Account{Uuid: uuid})
+	}
+
+	return users, nil
+}
+
 func resourceBranchRestrictionsCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(Clients).genClient
 	brApi := c.ApiClient.BranchRestrictionsApi
-	branchRestriction := createBranchRestriction(d)
 
 	repo := d.Get("repository").(string)
 	workspace := d.Get("owner").(string)
+	users, err := branchRestrictionUsers(c, workspace, d.Get("users").(*schema.Set))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	branchRestriction := createBranchRestriction(d, users)
+
 	branchRestrictionReq, res, err := brApi.RepositoriesWorkspaceRepoSlugBranchRestrictionsPost(c.AuthContext, *branchRestriction, repo, workspace)
 	if err := handleClientError(res, err); err != nil {
 		return diag.FromErr(err)
@@ -225,7 +261,7 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 	d.Set("kind", brRes.Kind)
 	d.Set("pattern", brRes.Pattern)
 	d.Set("value", brRes.Value)
-	d.Set("users", brRes.Users)
+	d.Set("users", flattenBranchRestrictionUsers(brRes.Users))
 	d.Set("groups", brRes.Groups)
 	d.Set("branch_type", brRes.BranchType)
 	d.Set("branch_match_kind", brRes.BranchMatchKind)
@@ -233,10 +269,24 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 	return nil
 }
 
+func flattenBranchRestrictionUsers(users []bitbucket.Account) []string {
+	displayNames := make([]string, 0, len(users))
+	for _, user := range users {
+		displayNames = append(displayNames, user.DisplayName)
+	}
+
+	return displayNames
+}
+
 func resourceBranchRestrictionsUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(Clients).genClient
 	brApi := c.ApiClient.BranchRestrictionsApi
-	branchRestriction := createBranchRestriction(d)
+	workspace := d.Get("owner").(string)
+	users, err := branchRestrictionUsers(c, workspace, d.Get("users").(*schema.Set))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	branchRestriction := createBranchRestriction(d, users)
 
 	_, res, err := brApi.RepositoriesWorkspaceRepoSlugBranchRestrictionsIdPut(c.AuthContext,
 		*branchRestriction, url.PathEscape(d.Id()),
