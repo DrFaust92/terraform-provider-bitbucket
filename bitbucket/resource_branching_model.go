@@ -20,7 +20,7 @@ type BranchingModel struct {
 	Development           *BranchModel  `json:"development,omitempty"`
 	Production            *BranchModel  `json:"production,omitempty"`
 	BranchTypes           []*BranchType `json:"branch_types"`
-	DefaultBranchDeletion *FlexBool `json:"default_branch_deletion,omitempty"`
+	DefaultBranchDeletion *FlexBool     `json:"default_branch_deletion,omitempty"`
 }
 
 type BranchModel struct {
