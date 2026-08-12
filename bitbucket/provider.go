@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	oauth2bitbucket "golang.org/x/oauth2/bitbucket"
 	oauth2clientcreds "golang.org/x/oauth2/clientcredentials"
@@ -117,11 +118,27 @@ func Provider() *schema.Provider {
 	}
 }
 
+func newHTTPClient() *http.Client {
+	client := retryablehttp.NewClient()
+	client.Logger = nil
+	client.RetryMax = 10
+	client.CheckRetry = func(ctx context.Context, response *http.Response, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+		return response.StatusCode == http.StatusTooManyRequests, nil
+	}
+	client.Backoff = retryablehttp.RateLimitLinearJitterBackoff
+	client.ErrorHandler = retryablehttp.PassthroughErrorHandler
+	return client.StandardClient()
+}
+
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	authCtx := context.Background()
 
+	httpClient := newHTTPClient()
 	client := &Client{
-		HTTPClient: &http.Client{},
+		HTTPClient: httpClient,
 	}
 
 	if username, ok := d.GetOk("username"); ok {
@@ -168,6 +185,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	conf := bitbucket.NewConfiguration()
+	conf.HTTPClient = httpClient
 	apiClient := ProviderConfig{
 		ApiClient:   bitbucket.NewAPIClient(conf),
 		AuthContext: authCtx,

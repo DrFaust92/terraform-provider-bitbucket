@@ -4,6 +4,7 @@ require (
 	github.com/DrFaust92/bitbucket-go-client v0.11.0
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/antihax/optional v1.0.0
+	github.com/hashicorp/go-retryablehttp v0.7.8
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.40.1
 	github.com/satori/go.uuid v1.2.0
 	golang.org/x/crypto v0.54.0
@@ -24,7 +25,6 @@ require (
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/go-plugin v1.7.0 // indirect
-	github.com/hashicorp/go-retryablehttp v0.7.8 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
 	github.com/hashicorp/go-version v1.9.0 // indirect
 	github.com/hashicorp/hc-install v0.9.4 // indirect
