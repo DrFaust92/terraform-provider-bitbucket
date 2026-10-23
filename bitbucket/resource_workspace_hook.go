@@ -17,6 +17,8 @@ import (
 )
 
 func resourceWorkspaceHook() *schema.Resource {
+	secretWO, secretWOVersion := writeOnlySchemas("secret")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceWorkspaceHookCreate,
 		ReadWithoutTimeout:   resourceWorkspaceHookRead,
@@ -62,6 +64,8 @@ func resourceWorkspaceHook() *schema.Resource {
 				Optional:  true,
 				Sensitive: true,
 			},
+			"secret_wo":         secretWO,
+			"secret_wo_version": secretWOVersion,
 			"uuid": {
 				Type:     schema.TypeString,
 				Computed: true,

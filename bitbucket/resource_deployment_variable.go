@@ -15,6 +15,8 @@ import (
 )
 
 func resourceDeploymentVariable() *schema.Resource {
+	valueWO, valueWOVersion := writeOnlySchemas("value")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceDeploymentVariableCreate,
 		UpdateWithoutTimeout: resourceDeploymentVariableUpdate,
@@ -42,10 +44,13 @@ func resourceDeploymentVariable() *schema.Resource {
 				Required: true,
 			},
 			"value": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
+				Type:         schema.TypeString,
+				Optional:     true,
+				Sensitive:    true,
+				ExactlyOneOf: []string{"value", "value_wo"},
 			},
+			"value_wo":         valueWO,
+			"value_wo_version": valueWOVersion,
 			"secured": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -62,7 +67,7 @@ func resourceDeploymentVariable() *schema.Resource {
 func newDeploymentVariableFromResource(d *schema.ResourceData) *bitbucket.DeploymentVariable {
 	dk := &bitbucket.DeploymentVariable{
 		Key:     d.Get("key").(string),
-		Value:   d.Get("value").(string),
+		Value:   writeOnlyOrValue(d, "value"),
 		Secured: d.Get("secured").(bool),
 	}
 	return dk
@@ -140,7 +145,8 @@ func resourceDeploymentVariableRead(ctx context.Context, d *schema.ResourceData,
 	d.Set("uuid", deployVar.Uuid)
 	d.Set("secured", deployVar.Secured)
 
-	if !deployVar.Secured {
+	// With value_wo the value must not be stored in state.
+	if !deployVar.Secured && !usesWriteOnly(d, "value") {
 		d.Set("value", deployVar.Value)
 	} else {
 		d.Set("value", d.Get("value").(string))

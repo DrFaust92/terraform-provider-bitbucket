@@ -13,6 +13,8 @@ import (
 )
 
 func resourcePipelineSshKey() *schema.Resource {
+	privateKeyWO, privateKeyWOVersion := writeOnlySchemas("private_key")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourcePipelineSshKeysPut,
 		ReadWithoutTimeout:   resourcePipelineSshKeysRead,
@@ -34,9 +36,12 @@ func resourcePipelineSshKey() *schema.Resource {
 				ForceNew: true,
 			},
 			"private_key": {
-				Type:     schema.TypeString,
-				Optional: true,
+				Type:      schema.TypeString,
+				Optional:  true,
+				Sensitive: true,
 			},
+			"private_key_wo":         privateKeyWO,
+			"private_key_wo_version": privateKeyWOVersion,
 			"public_key": {
 				Type:     schema.TypeString,
 				Optional: true,
@@ -113,7 +118,7 @@ func resourcePipelineSshKeysDelete(ctx context.Context, d *schema.ResourceData, 
 func expandPipelineSshKey(d *schema.ResourceData) *bitbucket.PipelineSshKeyPair {
 	key := &bitbucket.PipelineSshKeyPair{
 		PublicKey:  d.Get("public_key").(string),
-		PrivateKey: d.Get("private_key").(string),
+		PrivateKey: writeOnlyOrValue(d, "private_key"),
 	}
 
 	return key

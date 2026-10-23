@@ -13,6 +13,8 @@ import (
 )
 
 func resourceRepositoryVariable() *schema.Resource {
+	valueWO, valueWOVersion := writeOnlySchemas("value")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceRepositoryVariableCreate,
 		UpdateWithoutTimeout: resourceRepositoryVariableUpdate,
@@ -41,10 +43,13 @@ func resourceRepositoryVariable() *schema.Resource {
 				Required: true,
 			},
 			"value": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
+				Type:         schema.TypeString,
+				Optional:     true,
+				Sensitive:    true,
+				ExactlyOneOf: []string{"value", "value_wo"},
 			},
+			"value_wo":         valueWO,
+			"value_wo_version": valueWOVersion,
 			"secured": {
 				Type:     schema.TypeBool,
 				Optional: true,
@@ -65,7 +70,7 @@ func resourceRepositoryVariable() *schema.Resource {
 func newRepositoryVariableFromResource(d *schema.ResourceData) bitbucket.PipelineVariable {
 	dk := bitbucket.PipelineVariable{
 		Key:     d.Get("key").(string),
-		Value:   d.Get("value").(string),
+		Value:   writeOnlyOrValue(d, "value"),
 		Secured: d.Get("secured").(bool),
 	}
 	return dk
@@ -120,7 +125,8 @@ func resourceRepositoryVariableRead(ctx context.Context, d *schema.ResourceData,
 	d.Set("secured", rvRes.Secured)
 	d.Set("workspace", workspace)
 
-	if !rvRes.Secured {
+	// With value_wo the value must not be stored in state.
+	if !rvRes.Secured && !usesWriteOnly(d, "value") {
 		d.Set("value", rvRes.Value)
 	} else {
 		d.Set("value", d.Get("value").(string))
