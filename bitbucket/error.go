@@ -25,7 +25,8 @@ func handleClientError(httpResponse *http.Response, err error) error {
 	}
 
 	if httpResponse == nil || httpResponse.StatusCode < 400 {
-		return nil
+		// Transport errors (timeouts, connection resets) come without a response.
+		return err
 	}
 
 	clientHttpError, ok := err.(bitbucket.GenericSwaggerError)
@@ -43,12 +44,22 @@ func handleClientError(httpResponse *http.Response, err error) error {
 
 func extractErrorMessage(body []byte) string {
 	var bitbucketHttpError bitbucket.ModelError
-	if err := json.Unmarshal(body, &bitbucketHttpError); err == nil {
-		return bitbucketHttpError.Error_.Message
+	if err := json.Unmarshal(body, &bitbucketHttpError); err == nil && bitbucketHttpError.Error_ != nil && bitbucketHttpError.Error_.Message != "" {
+		apiErr := bitbucketHttpError.Error_
+		message := apiErr.Message
+		if apiErr.Detail != "" {
+			message = fmt.Sprintf("%s: %s", message, apiErr.Detail)
+		}
+		if apiErr.Data != nil {
+			if data, err := json.Marshal(apiErr.Data); err == nil {
+				message = fmt.Sprintf("%s %s", message, data)
+			}
+		}
+		return message
 	}
 
 	var clientScopeErr ClientScopeError
-	if err := json.Unmarshal(body, &clientScopeErr); err == nil {
+	if err := json.Unmarshal(body, &clientScopeErr); err == nil && clientScopeErr.Error.Message != "" {
 		message := clientScopeErr.Error.Message
 		required := clientScopeErr.Error.Detail.Required
 		granted := clientScopeErr.Error.Detail.Granted

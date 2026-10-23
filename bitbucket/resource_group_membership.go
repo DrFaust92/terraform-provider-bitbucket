@@ -104,10 +104,6 @@ func resourceGroupMembershipsRead(ctx context.Context, d *schema.ResourceData, m
 
 	log.Printf("[DEBUG] Group Membership Response Decoded: %#v", members)
 
-	if len(members) == 0 {
-		return diag.Errorf("error getting Group Members (%s): empty response", d.Id())
-	}
-
 	var member *UserGroupMembership
 	for _, mbr := range members {
 		if mbr.UUID == uuid {
@@ -117,7 +113,13 @@ func resourceGroupMembershipsRead(ctx context.Context, d *schema.ResourceData, m
 	}
 
 	if member == nil {
-		return diag.Errorf("error getting Group Member (%s): not found", d.Id())
+		if d.IsNewResource() {
+			return diag.Errorf("error getting Group Member (%s): not found", d.Id())
+		}
+
+		log.Printf("[WARN] Group Member (%s) not found, removing from state", d.Id())
+		d.SetId("")
+		return nil
 	}
 
 	log.Printf("[DEBUG] Group Member Response Decoded: %#v", member)

@@ -121,7 +121,11 @@ func resourceDeployKeysRead(ctx context.Context, d *schema.ResourceData, m inter
 
 	d.Set("repository", repo)
 	d.Set("workspace", workspace)
-	d.Set("key", d.Get("key").(string))
+	// The API may return the key without the trailing comment, so keep the configured value
+	// unless the key itself differs (or is unknown, e.g. on import).
+	if stateKey := d.Get("key").(string); deployKey.Key != "" && (stateKey == "" || sshKeyBody(stateKey) != sshKeyBody(deployKey.Key)) {
+		d.Set("key", deployKey.Key)
+	}
 	d.Set("label", deployKey.Label)
 	d.Set("comment", deployKey.Comment)
 	d.Set("key_id", keyId)
@@ -180,4 +184,14 @@ func deployKeyId(id string) (string, string, string, error) {
 	}
 
 	return parts[0], parts[1], parts[2], nil
+}
+
+// sshKeyBody returns the "<type> <base64>" part of an authorized_keys formatted key.
+func sshKeyBody(key string) string {
+	fields := strings.Fields(key)
+	if len(fields) > 2 {
+		fields = fields[:2]
+	}
+
+	return strings.Join(fields, " ")
 }

@@ -65,7 +65,7 @@ The following arguments are supported:
 * `workspace` - (Required) The workspace of this project. Can be you or any team you
   have write access to.
 * `project` - (Required) The key of the project.
-* `development` - (Optional) The development branch can be configured to a specific branch or to track the main branch. When set to a specific branch it must currently exist. Only the passed properties will be updated. The properties not passed will be left unchanged. A request without a development property will leave the development branch unchanged. See [Development](#development) below.
+* `development` - (Required) The development branch can be configured to a specific branch or to track the main branch. When set to a specific branch it must currently exist. Only the passed properties will be updated. The properties not passed will be left unchanged. See [Development](#development) below.
 * `production` - (Optional) The production branch can be a specific branch, the main branch or disabled. When set to a specific branch it must currently exist. The enabled property can be used to enable (true) or disable (false) it. Only the passed properties will be updated. The properties not passed will be left unchanged. A request without a production property will leave the production branch unchanged. See [Production](#production) below.
 * `branch_type` - (Required) A set of branch type to define `feature`, `bugfix`, `release`, `hotfix` prefixes. See [Branch Type](#branch-type) below.
 
