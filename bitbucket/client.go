@@ -15,7 +15,10 @@ import (
 type Error struct {
 	APIError struct {
 		Message string `json:"message,omitempty"`
+		Key     string `json:"key,omitempty"`
 	} `json:"error,omitempty"`
+	Message    string `json:"message,omitempty"`
+	Key        string `json:"key,omitempty"`
 	Type       string `json:"type,omitempty"`
 	StatusCode int
 	Endpoint   string
