@@ -1,7 +1,7 @@
 module github.com/terraform-providers/terraform-provider-bitbucket
 
 require (
-	github.com/DrFaust92/bitbucket-go-client v0.11.0
+	github.com/DrFaust92/bitbucket-go-client v0.11.1
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/antihax/optional v1.0.0
 	github.com/hashicorp/terraform-plugin-sdk/v2 v2.40.1

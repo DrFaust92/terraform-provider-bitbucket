@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -105,29 +106,26 @@ func resourceDeploymentVariableRead(ctx context.Context, d *schema.ResourceData,
 		return diag.FromErr(err)
 	}
 
-	rvRes, res, err := pipeApi.GetDeploymentVariables(c.AuthContext, workspace, repoSlug, deployment, nil)
-
-	if res != nil && res.StatusCode == http.StatusNotFound {
-		log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
-		d.SetId("")
-		return nil
-	}
-
-	if err := handleClientError(res, err); err != nil {
-		return diag.FromErr(err)
-	}
-
-	if rvRes.Size < 1 {
-		log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
-		d.SetId("")
-		return nil
-	}
-
 	var deployVar *bitbucket.DeploymentVariable
 
-	for _, rv := range rvRes.Values {
-		if rv.Uuid == d.Id() {
-			deployVar = &rv
+	// The API returns 10 variables per page, follow pages until the variable is found.
+	for page := int32(1); deployVar == nil; page++ {
+		opts := &bitbucket.PipelinesApiGetDeploymentVariablesOpts{Page: optional.NewInt32(page)}
+		rvRes, res, err := pipeApi.GetDeploymentVariables(c.AuthContext, workspace, repoSlug, deployment, opts)
+
+		if res != nil && res.StatusCode == http.StatusNotFound {
+			log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
+			d.SetId("")
+			return nil
+		}
+
+		if err := handleClientError(res, err); err != nil {
+			return diag.FromErr(err)
+		}
+
+		deployVar = findDeploymentVariable(rvRes.Values, d.Id())
+
+		if rvRes.Next == "" || len(rvRes.Values) == 0 {
 			break
 		}
 	}
@@ -195,4 +193,14 @@ func deployVarId(repo string) (string, string, error) {
 	} else {
 		return "", "", fmt.Errorf("incorrect ID format, should match `owner/key`")
 	}
+}
+
+func findDeploymentVariable(vars []bitbucket.DeploymentVariable, uuid string) *bitbucket.DeploymentVariable {
+	for i := range vars {
+		if vars[i].Uuid == uuid {
+			return &vars[i]
+		}
+	}
+
+	return nil
 }

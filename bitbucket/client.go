@@ -15,6 +15,8 @@ import (
 type Error struct {
 	APIError struct {
 		Message string `json:"message,omitempty"`
+		// Detail is a string on most endpoints, but an object on some (e.g. scope errors).
+		Detail json.RawMessage `json:"detail,omitempty"`
 	} `json:"error,omitempty"`
 	Type       string `json:"type,omitempty"`
 	StatusCode int
@@ -22,7 +24,17 @@ type Error struct {
 }
 
 func (e Error) Error() string {
-	return fmt.Sprintf("API Error: %d %s %s", e.StatusCode, e.Endpoint, e.APIError.Message)
+	message := e.APIError.Message
+	if detail := e.APIError.Detail; len(detail) > 0 {
+		var s string
+		if err := json.Unmarshal(detail, &s); err == nil {
+			message = fmt.Sprintf("%s: %s", message, s)
+		} else {
+			message = fmt.Sprintf("%s: %s", message, detail)
+		}
+	}
+
+	return fmt.Sprintf("API Error: %d %s %s", e.StatusCode, e.Endpoint, message)
 }
 
 const (
@@ -86,6 +98,10 @@ func (c *Client) Do(method, endpoint string, payload *bytes.Buffer, contentType 
 
 	resp, err := c.HTTPClient.Do(req)
 	log.Printf("[DEBUG] Resp: %v Err: %v", resp, err)
+	if err != nil {
+		return resp, err
+	}
+
 	if resp.StatusCode >= 400 || resp.StatusCode < 200 {
 		apiError := Error{
 			StatusCode: resp.StatusCode,
