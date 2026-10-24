@@ -225,9 +225,9 @@ func TestAccBitbucketBranchingModel_defaultBranchDeletion(t *testing.T) {
 	resourceName := "bitbucket_branching_model.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBitbucketBranchingModelDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketBranchingModelDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBitbucketBranchingModelDeletionConfig(testUser, rName, true),

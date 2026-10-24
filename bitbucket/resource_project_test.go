@@ -173,9 +173,9 @@ func TestAccBitbucketProject_renameKey(t *testing.T) {
 	key2 := "TF" + strings.ToUpper(acctest.RandString(6))
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBitbucketProjectDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketProjectDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBitbucketProjectKeyConfig(testTeam, rName, key1),

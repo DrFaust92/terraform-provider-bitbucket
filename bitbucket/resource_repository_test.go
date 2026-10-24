@@ -417,9 +417,9 @@ func TestAccBitbucketRepository_rename(t *testing.T) {
 	resourceName := "bitbucket_repository.test"
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBitbucketRepositoryDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketRepositoryDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBitbucketRepoPipelinesConfig(workspace, rName, false),
@@ -470,8 +470,8 @@ func TestAccBitbucketRepository_invalidImportId(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tf-test")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:  func() { testAccPreCheck(t) },
-		Providers: testAccProviders,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config:        testAccBitbucketRepoConfig(workspace, rName),

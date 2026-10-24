@@ -110,6 +110,9 @@ func withFakeBitbucket(t *testing.T) *fakeBitbucket {
 
 	t.Setenv("BITBUCKET_USERNAME", "user")
 	t.Setenv("BITBUCKET_PASSWORD", "password")
+	for _, k := range []string{"BITBUCKET_OAUTH_TOKEN", "BITBUCKET_OAUTH_CLIENT_ID", "BITBUCKET_OAUTH_CLIENT_SECRET"} {
+		t.Setenv(k, "")
+	}
 
 	return fake
 }

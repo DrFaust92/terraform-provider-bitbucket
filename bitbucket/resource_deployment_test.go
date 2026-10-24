@@ -182,9 +182,9 @@ func TestAccBitbucketDeployment_renameKeepsRestrictions(t *testing.T) {
 	owner := os.Getenv("BITBUCKET_TEAM")
 
 	resource.Test(t, resource.TestCase{
-		PreCheck:     func() { testAccPreCheck(t) },
-		Providers:    testAccProviders,
-		CheckDestroy: testAccCheckBitbucketDeploymentDestroy,
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketDeploymentDestroy,
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBitbucketDeploymentAdmin(owner, rName, rName, true),
