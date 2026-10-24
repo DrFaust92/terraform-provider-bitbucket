@@ -42,6 +42,15 @@ func TestAccBitbucketSshKey_basic(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"key"},
 			},
+			{
+				ResourceName:       resourceName,
+				ImportState:        true,
+				ImportStatePersist: true,
+			},
+			{
+				Config:   testAccBitbucketSshKeyConfig(publicKey),
+				PlanOnly: true,
+			},
 		},
 	})
 }

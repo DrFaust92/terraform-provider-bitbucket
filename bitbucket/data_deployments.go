@@ -3,8 +3,9 @@ package bitbucket
 import (
 	"context"
 	"fmt"
-	"log"
+	"net/http"
 
+	"github.com/DrFaust92/bitbucket-go-client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -43,23 +44,31 @@ func dataReadDeployments(ctx context.Context, d *schema.ResourceData, m interfac
 	workspace := d.Get("workspace").(string)
 	repoId := d.Get("repository").(string)
 
-	deploymentsResp, res, err := deployApi.GetEnvironmentsForRepository(c.AuthContext, workspace, repoId, nil)
-	if err := handleClientError(res, err); err != nil {
-		return diag.FromErr(err)
-	}
+	client := m.(Clients).httpClient
+	var uuids, names []string
+	next := ""
+	for {
+		var page bitbucket.PaginatedEnvironments
+		var res *http.Response
+		var err error
+		if next == "" {
+			page, res, err = deployApi.GetEnvironmentsForRepository(c.AuthContext, workspace, repoId, nil)
+		} else {
+			res, err = client.GetNext(next, &page)
+		}
+		if err := handleClientError(res, err); err != nil {
+			return diag.FromErr(err)
+		}
 
-	deployments := deploymentsResp.Values
+		for _, deployment := range page.Values {
+			uuids = append(uuids, deployment.Uuid)
+			names = append(names, deployment.Name)
+		}
 
-	log.Printf("haha %#v", deployments)
-
-	var uuids []string
-	for _, deployment := range deployments {
-		uuids = append(uuids, deployment.Uuid)
-	}
-
-	var names []string
-	for _, deployment := range deployments {
-		names = append(names, deployment.Name)
+		if page.Next == "" {
+			break
+		}
+		next = page.Next
 	}
 
 	d.SetId(fmt.Sprintf("%s/%s", workspace, repoId))

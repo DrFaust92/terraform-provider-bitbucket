@@ -221,6 +221,12 @@ func updateRepository(ctx context.Context, d *schema.ResourceData, m interface{}
 		}
 	}
 
+	if d.HasChange("website") {
+		if err := setRepositoryWebsite(client, workspace, repoSlug, d.Get("website").(string)); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	if d.HasChange("pipelines_enabled") {
 		// nolint:staticcheck
 		if v, ok := d.GetOkExists("pipelines_enabled"); ok {
@@ -285,6 +291,12 @@ func resourceRepositoryCreate(ctx context.Context, d *schema.ResourceData, m int
 	}
 
 	d.SetId(fmt.Sprintf("%s/%s", d.Get("owner").(string), repoSlug))
+
+	if website := d.Get("website").(string); website != "" {
+		if err := setRepositoryWebsite(m.(Clients).httpClient, d.Get("owner").(string), repoSlug, website); err != nil {
+			return diag.FromErr(err)
+		}
+	}
 
 	if d.Get("pipelines_enabled").(bool) {
 		pipelinesConfig := &bitbucket.PipelinesConfig{Enabled: true}
@@ -362,7 +374,9 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	if repoRes.Mainbranch != nil {
 		d.Set("mainbranch", repoRes.Mainbranch.Name)
 	}
-	// d.Set("website", repoRes.Website)
+	if diags := readRepositoryWebsite(d, m.(Clients).httpClient, workspace, repoSlug); diags.HasError() {
+		return diags
+	}
 	d.Set("description", repoRes.Description)
 	d.Set("project_key", repoRes.Project.Key)
 	d.Set("uuid", repoRes.Uuid)
@@ -563,6 +577,40 @@ func denyOwnerChange(_ context.Context, d *schema.ResourceDiff, _ interface{}) e
 	if d.Id() != "" && d.HasChange("owner") {
 		o, n := d.GetChange("owner")
 		return fmt.Errorf("changing owner from %q to %q is not supported; transfer it in Bitbucket and re-import, or replace it explicitly", o, n)
+	}
+	return nil
+}
+
+func setRepositoryWebsite(client Client, workspace, repoSlug, website string) error {
+	payload, err := json.Marshal(map[string]string{"website": website})
+	if err != nil {
+		return err
+	}
+	_, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s", workspace, repoSlug), bytes.NewBuffer(payload))
+	return err
+}
+
+func readRepositoryWebsite(d *schema.ResourceData, client Client, workspace, repoSlug string) diag.Diagnostics {
+	if d.Get("website").(string) == "" {
+		return nil
+	}
+
+	res, err := client.Get(fmt.Sprintf("2.0/repositories/%s/%s?fields=website", workspace, repoSlug))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer res.Body.Close()
+
+	var repo struct {
+		Website *string `json:"website"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
+		return diag.FromErr(err)
+	}
+	if repo.Website == nil {
+		d.Set("website", "")
+	} else {
+		d.Set("website", *repo.Website)
 	}
 	return nil
 }

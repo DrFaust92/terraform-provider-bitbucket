@@ -566,3 +566,39 @@ resource "bitbucket_commit_file" "develop" {
 }
 `, workspace, rName, branchLine)
 }
+
+func TestAccBitbucketRepository_website(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	workspace := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_repository.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketRepositoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketRepoWebsiteConfig(workspace, rName, "https://example.com/one"),
+				Check:  resource.TestCheckResourceAttr(resourceName, "website", "https://example.com/one"),
+			},
+			{
+				Config: testAccBitbucketRepoWebsiteConfig(workspace, rName, "https://example.com/two"),
+				Check:  resource.TestCheckResourceAttr(resourceName, "website", "https://example.com/two"),
+			},
+			{
+				Config: testAccBitbucketRepoConfig(workspace, rName),
+				Check:  resource.TestCheckResourceAttr(resourceName, "website", ""),
+			},
+		},
+	})
+}
+
+func testAccBitbucketRepoWebsiteConfig(workspace, rName, website string) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner   = %[1]q
+  name    = %[2]q
+  website = %[3]q
+}
+`, workspace, rName, website)
+}

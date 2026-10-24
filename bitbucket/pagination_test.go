@@ -88,3 +88,24 @@ func TestWorkspaceMembersReadFollowsCursorPages(t *testing.T) {
 		t.Fatalf("got %v members, want 2 (requests: %v)", got, rt.seen)
 	}
 }
+
+func TestDeploymentsDataSourceFollowsCursorPages(t *testing.T) {
+	rt := &cursorPagesTransport{pages: map[string]string{
+		"/2.0/repositories/ws/repo/environments":           `{"values":[{"uuid":"{a}","name":"Test"}],"next":"https://api.bitbucket.org/2.0/repositories/ws/repo/environments?page=ZW52"}`,
+		"/2.0/repositories/ws/repo/environments?page=ZW52": `{"values":[{"uuid":"{b}","name":"Production"}]}`,
+	}}
+
+	res := dataDeployments()
+	d := res.TestResourceData()
+	for k, v := range map[string]string{"workspace": "ws", "repository": "repo"} {
+		if err := d.Set(k, v); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if diags := res.ReadWithoutTimeout(context.Background(), d, clientsWithTransport(rt)); diags.HasError() {
+		t.Fatalf("unexpected error: %v (requests: %v)", diags, rt.seen)
+	}
+	if got := d.Get("uuids.#"); got != 2 {
+		t.Fatalf("got %v uuids, want 2 (requests: %v)", got, rt.seen)
+	}
+}
