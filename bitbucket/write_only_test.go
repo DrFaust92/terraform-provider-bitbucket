@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/resource"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/terraform"
 )
 
@@ -162,7 +163,7 @@ resource "bitbucket_repository_variable" "test" {
 	}
 
 	resource.UnitTest(t, resource.TestCase{
-		Providers: testAccProviders,
+		ProviderFactories: writeOnlyTestProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: config("s3cret", "1"),
@@ -206,7 +207,7 @@ resource "bitbucket_hook" "test" {
 	}
 
 	resource.UnitTest(t, resource.TestCase{
-		Providers: testAccProviders,
+		ProviderFactories: writeOnlyTestProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: config("hook-secret", "1"),
@@ -230,7 +231,7 @@ func TestWriteOnlyConflictsWithValue(t *testing.T) {
 	withFakeBitbucket(t)
 
 	resource.UnitTest(t, resource.TestCase{
-		Providers: testAccProviders,
+		ProviderFactories: writeOnlyTestProviderFactories,
 		Steps: []resource.TestStep{
 			{
 				Config: `
@@ -256,4 +257,8 @@ resource "bitbucket_repository_variable" "test" {
 			},
 		},
 	})
+}
+
+var writeOnlyTestProviderFactories = map[string]func() (*schema.Provider, error){
+	"bitbucket": func() (*schema.Provider, error) { return Provider(), nil },
 }
