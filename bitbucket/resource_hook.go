@@ -30,6 +30,8 @@ type Hook struct {
 }
 
 func resourceHook() *schema.Resource {
+	secretWO, secretWOVersion := writeOnlySchemas("secret")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceHookCreate,
 		ReadWithoutTimeout:   resourceHookRead,
@@ -81,6 +83,8 @@ func resourceHook() *schema.Resource {
 				Optional:  true,
 				Sensitive: true,
 			},
+			"secret_wo":         secretWO,
+			"secret_wo_version": secretWOVersion,
 			"uuid": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -148,7 +152,7 @@ func createHook(d *schema.ResourceData) *Hook {
 		Active:               d.Get("active").(bool),
 		HistoryEnabled:       d.Get("history_enabled").(bool),
 		SkipCertVerification: d.Get("skip_cert_verification").(bool),
-		Secret:               d.Get("secret").(string),
+		Secret:               writeOnlyOrValue(d, "secret"),
 		Events:               events,
 	}
 

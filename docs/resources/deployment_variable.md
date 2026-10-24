@@ -39,7 +39,9 @@ resource "bitbucket_deployment_variable" "country" {
 
 * `deployment` - (Required) The deployment ID you want to assign this variable to.
 * `key` - (Required) The unique name of the variable.
-* `value` - (Required) The value of the variable.
+* `value` - (Optional) Exactly one of `value` or `value_wo` must be set. The value of the variable.
+* `value_wo` - (Optional) Write-only alternative to `value`, never stored in Terraform state or plan output. Requires Terraform 1.11 or later. Conflicts with `value`. See [write-only arguments](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/write-only).
+* `value_wo_version` - (Optional) Required with `value_wo`. Terraform cannot detect changes to write-only values, change this value (e.g. `"2"`) to send an updated `value_wo`.
 * `secured` - (Optional)  If true, this variable will be treated as secured. The value will never be exposed in the logs or the REST API.
 
 ## Attributes Reference
