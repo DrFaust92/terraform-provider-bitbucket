@@ -36,9 +36,10 @@ func resourceDeployKey() *schema.Resource {
 				ForceNew: true,
 			},
 			"key": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+				Type:             schema.TypeString,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: suppressSSHKeyCommentDiff,
 			},
 			"label": {
 				Type:     schema.TypeString,
@@ -187,6 +188,10 @@ func deployKeyId(id string) (string, string, string, error) {
 }
 
 // sshKeyBody returns the "<type> <base64>" part of an authorized_keys formatted key.
+func suppressSSHKeyCommentDiff(_, old, new string, _ *schema.ResourceData) bool {
+	return old != "" && new != "" && sshKeyBody(old) == sshKeyBody(new)
+}
+
 func sshKeyBody(key string) string {
 	fields := strings.Fields(key)
 	if len(fields) > 2 {

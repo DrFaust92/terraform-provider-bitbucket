@@ -218,6 +218,12 @@ func resourceForkedRepositoryCreate(ctx context.Context, d *schema.ResourceData,
 
 	d.SetId(fmt.Sprintf("%s/%s", d.Get("owner").(string), repoSlug))
 
+	if website := d.Get("website").(string); website != "" {
+		if err := setRepositoryWebsite(m.(Clients).httpClient, d.Get("owner").(string), repoSlug, website); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
 	pipelinesEnabled := d.Get("pipelines_enabled").(bool)
 	pipelinesConfig := &bitbucket.PipelinesConfig{Enabled: pipelinesEnabled}
 
@@ -290,10 +296,12 @@ func resourceForkedRepositoryRead(ctx context.Context, d *schema.ResourceData, m
 	d.Set("has_wiki", repoRes.HasWiki)
 	d.Set("has_issues", repoRes.HasIssues)
 	d.Set("name", repoRes.Name)
-	d.Set("slug", repoRes.Name)
+	d.Set("slug", repoRes.Slug)
 	d.Set("language", repoRes.Language)
 	d.Set("fork_policy", repoRes.ForkPolicy)
-	// d.Set("website", repoRes.Website)
+	if diags := readRepositoryWebsite(d, m.(Clients).httpClient, workspace, repoSlug); diags.HasError() {
+		return diags
+	}
 	d.Set("description", repoRes.Description)
 	d.Set("project_key", repoRes.Project.Key)
 	d.Set("uuid", repoRes.Uuid)
