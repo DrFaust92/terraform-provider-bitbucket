@@ -173,3 +173,38 @@ resource "bitbucket_deployment" "test" {
 }
 `, workspace, repoName, deployName, admin)
 }
+
+func TestAccBitbucketDeployment_renameKeepsRestrictions(t *testing.T) {
+	var deploy Deployment
+	resourceName := "bitbucket_deployment.test"
+	rName := acctest.RandomWithPrefix("tf-test")
+	newName := rName + "-renamed"
+	owner := os.Getenv("BITBUCKET_TEAM")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckBitbucketDeploymentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketDeploymentAdmin(owner, rName, rName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketDeploymentExists(resourceName, &deploy),
+					resource.TestCheckResourceAttr(resourceName, "restrictions.0.admin_only", "true"),
+				),
+			},
+			{
+				Config: testAccBitbucketDeploymentAdmin(owner, rName, newName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketDeploymentExists(resourceName, &deploy),
+					resource.TestCheckResourceAttr(resourceName, "name", newName),
+					resource.TestCheckResourceAttr(resourceName, "restrictions.0.admin_only", "true"),
+				),
+			},
+			{
+				Config:   testAccBitbucketDeploymentAdmin(owner, rName, newName, true),
+				PlanOnly: true,
+			},
+		},
+	})
+}

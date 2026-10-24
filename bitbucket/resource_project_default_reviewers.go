@@ -76,14 +76,14 @@ func resourceProjectDefaultReviewersRead(ctx context.Context, d *schema.Resource
 
 	for {
 		reviewers, res, err := projectsApi.WorkspacesWorkspaceProjectsProjectKeyDefaultReviewersGet(c.AuthContext, project, workspace, &options)
-		if err := handleClientError(res, err); err != nil {
-			return diag.FromErr(err)
-		}
-
-		if res.StatusCode == http.StatusNotFound {
+		if res != nil && res.StatusCode == http.StatusNotFound {
 			log.Printf("[WARN] Project Default Reviewers (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
+		}
+
+		if err := handleClientError(res, err); err != nil {
+			return diag.FromErr(err)
 		}
 
 		for _, reviewer := range reviewers.Values {

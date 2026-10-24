@@ -217,3 +217,55 @@ func testAccCheckBitbucketBranchingModelExists(n string, branchRestriction *Bran
 		return nil
 	}
 }
+
+func TestAccBitbucketBranchingModel_defaultBranchDeletion(t *testing.T) {
+	var branchingModel BranchingModel
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branching_model.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders,
+		CheckDestroy: testAccCheckBitbucketBranchingModelDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchingModelDeletionConfig(testUser, rName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchingModelExists(resourceName, &branchingModel),
+					resource.TestCheckResourceAttr(resourceName, "default_branch_deletion", "true"),
+				),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccBitbucketBranchingModelDeletionConfig(testUser, rName, false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchingModelExists(resourceName, &branchingModel),
+					resource.TestCheckResourceAttr(resourceName, "default_branch_deletion", "false"),
+				),
+			},
+		},
+	})
+}
+
+func testAccBitbucketBranchingModelDeletionConfig(testUser, rName string, deletion bool) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branching_model" "test" {
+  owner                   = %[1]q
+  repository              = bitbucket_repository.test.name
+  default_branch_deletion = %[3]t
+
+  development {
+    use_mainbranch = true
+  }
+}
+`, testUser, rName, deletion)
+}

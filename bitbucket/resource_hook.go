@@ -200,7 +200,7 @@ func resourceHookRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		url.PathEscape(d.Id()),
 	))
 
-	if hookReq.StatusCode == http.StatusNotFound {
+	if hookReq != nil && hookReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Repository Hook (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

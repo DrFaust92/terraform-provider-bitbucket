@@ -55,6 +55,14 @@ func extractErrorMessage(body []byte) string {
 				message = fmt.Sprintf("%s %s", message, data)
 			}
 		}
+		var withFields struct {
+			Error struct {
+				Fields json.RawMessage `json:"fields"`
+			} `json:"error"`
+		}
+		if json.Unmarshal(body, &withFields) == nil && len(withFields.Error.Fields) > 0 {
+			message = fmt.Sprintf("%s %s", message, withFields.Error.Fields)
+		}
 		return message
 	}
 

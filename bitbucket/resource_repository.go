@@ -23,6 +23,7 @@ func resourceRepository() *schema.Resource {
 		CreateWithoutTimeout: resourceRepositoryCreate,
 		UpdateWithoutTimeout: resourceRepositoryUpdate,
 		ReadWithoutTimeout:   resourceRepositoryRead,
+		CustomizeDiff:        denyOwnerChange,
 		DeleteWithoutTimeout: resourceRepositoryDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -177,18 +178,22 @@ func newRepositoryFromResource(d *schema.ResourceData) *bitbucket.Repository {
 }
 
 func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	if diags := updateRepository(ctx, d, m); diags.HasError() {
+		return diags
+	}
+	return resourceRepositoryRead(ctx, d, m)
+}
+
+func updateRepository(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(Clients).genClient
 	repoApi := c.ApiClient.RepositoriesApi
 	pipeApi := c.ApiClient.PipelinesApi
 	client := m.(Clients).httpClient
 
-	var repoSlug string
-	repoSlug = d.Get("slug").(string)
-	if repoSlug == "" {
-		repoSlug = d.Get("name").(string)
+	workspace, repoSlug, err := repositoryId(d.Id())
+	if err != nil {
+		return diag.FromErr(err)
 	}
-	repoSlug = computeSlug(repoSlug)
-	workspace := d.Get("owner").(string)
 
 	if d.HasChangesExcept("pipelines_enabled", "inherit_default_merge_strategy", "inherit_branching_model") {
 		repository := newRepositoryFromResource(d)
@@ -196,23 +201,15 @@ func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m int
 		repoBody := &bitbucket.RepositoriesApiRepositoriesWorkspaceRepoSlugPutOpts{
 			Body: optional.NewInterface(repository),
 		}
-		_, res, err := repoApi.RepositoriesWorkspaceRepoSlugPut(c.AuthContext, repoSlug, workspace, repoBody)
+		repo, res, err := repoApi.RepositoriesWorkspaceRepoSlugPut(c.AuthContext, repoSlug, workspace, repoBody)
 		if err := handleClientError(res, err); err != nil {
 			return diag.FromErr(err)
 		}
-	}
 
-	// Check if the "owner" or "name" properties have changed. If so:
-	// 1. Update the resource ID used by Terraform to track the resource
-	// 2. Update the workspace and repoSlug variables used to make API calls
-	if d.HasChange("owner") || d.HasChange("name") {
-		_, newWorkspace := d.GetChange("owner")
-		_, newRepoSlug := d.GetChange("name")
-		workspace = newWorkspace.(string)
-		repoSlug = newRepoSlug.(string)
-		newId := fmt.Sprintf("%s/%s", workspace, repoSlug)
-		log.Printf("[DEBUG] repo owner/name has changed; setting new resource ID: %s", newId)
-		d.SetId(newId)
+		if repo.Slug != "" && repo.Slug != repoSlug {
+			repoSlug = repo.Slug
+			d.SetId(fmt.Sprintf("%s/%s", workspace, repoSlug))
+		}
 	}
 
 	if d.HasChange("pipelines_enabled") {
@@ -249,7 +246,7 @@ func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m int
 		}
 	}
 
-	return resourceRepositoryRead(ctx, d, m)
+	return nil
 }
 
 func resourceRepositoryCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -325,17 +322,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 
 	workspace, repoSlug, err := repositoryId(d.Id())
 	if err != nil {
-		diag.FromErr(err)
-	}
-
-	// Check if the "owner" or "name" properties have changed. If so, update the
-	// the workspace and repoSlug variables used to make API calls.
-	if d.HasChange("owner") || d.HasChange("name") {
-		_, newWorkspace := d.GetChange("owner")
-		_, newRepoSlug := d.GetChange("name")
-		workspace = newWorkspace.(string)
-		repoSlug = newRepoSlug.(string)
-		log.Printf("[DEBUG] repo owner/name has changed to %s/%s", workspace, repoSlug)
+		return diag.FromErr(err)
 	}
 
 	if repoSlug == "" {
@@ -380,7 +367,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	d.Set("link", flattenLinks(repoRes.Links))
 
 	pipelinesConfigReq, res, err := pipeApi.GetRepositoryPipelineConfig(c.AuthContext, workspace, repoSlug)
-	if err := handleClientError(res, err); err != nil && res.StatusCode != http.StatusNotFound {
+	if err := handleClientError(res, err); err != nil && (res == nil || res.StatusCode != http.StatusNotFound) {
 		return diag.FromErr(err)
 	}
 
@@ -555,8 +542,16 @@ func repositoryId(id string) (string, string, error) {
 	parts := strings.Split(id, "/")
 
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE:REPO-SLUG", id)
+		return "", "", fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG", id)
 	}
 
 	return parts[0], parts[1], nil
+}
+
+func denyOwnerChange(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.Id() != "" && d.HasChange("owner") {
+		o, n := d.GetChange("owner")
+		return fmt.Errorf("changing owner from %q to %q is not supported; transfer it in Bitbucket and re-import, or replace it explicitly", o, n)
+	}
+	return nil
 }

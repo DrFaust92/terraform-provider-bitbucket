@@ -125,7 +125,7 @@ func resourceProjectGroupPermissionRead(ctx context.Context, d *schema.ResourceD
 		groupSlug,
 	))
 
-	if permissionReq.StatusCode == http.StatusNotFound {
+	if permissionReq != nil && permissionReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Project Group Permission (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

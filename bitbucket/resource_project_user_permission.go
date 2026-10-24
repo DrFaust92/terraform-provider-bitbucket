@@ -122,7 +122,7 @@ func resourceProjectUserPermissionRead(ctx context.Context, d *schema.ResourceDa
 		userSlug,
 	))
 
-	if permissionReq.StatusCode == http.StatusNotFound {
+	if permissionReq != nil && permissionReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Project User Permission (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

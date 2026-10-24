@@ -76,12 +76,16 @@ func resourceGroupMembershipsRead(ctx context.Context, d *schema.ResourceData, m
 		return diag.FromErr(err)
 	}
 
-	groupsReq, _ := client.Get(fmt.Sprintf("1.0/groups/%s/%s/members", workspace, slug))
+	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s/members", workspace, slug))
 
-	if groupsReq.StatusCode == http.StatusNotFound {
+	if groupsReq != nil && groupsReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Group Membership (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
+	}
+
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	if groupsReq.Body == nil {

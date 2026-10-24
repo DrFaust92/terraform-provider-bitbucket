@@ -17,6 +17,7 @@ type Error struct {
 		Message string `json:"message,omitempty"`
 		// Detail is a string on most endpoints, but an object on some (e.g. scope errors).
 		Detail json.RawMessage `json:"detail,omitempty"`
+		Fields json.RawMessage `json:"fields,omitempty"`
 	} `json:"error,omitempty"`
 	Type       string `json:"type,omitempty"`
 	StatusCode int
@@ -32,6 +33,10 @@ func (e Error) Error() string {
 		} else {
 			message = fmt.Sprintf("%s: %s", message, detail)
 		}
+	}
+
+	if fields := e.APIError.Fields; len(fields) > 0 {
+		message = fmt.Sprintf("%s %s", message, fields)
 	}
 
 	return fmt.Sprintf("API Error: %d %s %s", e.StatusCode, e.Endpoint, message)

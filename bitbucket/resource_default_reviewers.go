@@ -77,14 +77,14 @@ func resourceDefaultReviewersRead(ctx context.Context, d *schema.ResourceData, m
 
 	for {
 		reviewers, res, err := prApi.RepositoriesWorkspaceRepoSlugDefaultReviewersGet(c.AuthContext, repo, owner, &options)
-		if err := handleClientError(res, err); err != nil {
-			return diag.FromErr(err)
-		}
-
-		if res.StatusCode == http.StatusNotFound {
+		if res != nil && res.StatusCode == http.StatusNotFound {
 			log.Printf("[WARN] Default Reviewers (%s) not found, removing from state", d.Id())
 			d.SetId("")
 			return nil
+		}
+
+		if err := handleClientError(res, err); err != nil {
+			return diag.FromErr(err)
 		}
 
 		for _, reviewer := range reviewers.Values {
