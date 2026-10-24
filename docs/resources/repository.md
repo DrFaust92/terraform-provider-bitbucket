@@ -60,6 +60,7 @@ The following arguments are supported:
 * `link` - (Optional) A set of links to a resource related to this object. See [Link](#link) Below.
 * `inherit_default_merge_strategy` - (Optional) Whether to inherit default merge strategy from project.
 * `inherit_branching_model` - (Optional) Whether to inherit branching model from project.
+* `mainbranch` - (Optional) Name of the main branch. Defaults to the branch Bitbucket picks; set it to change it on an existing repository.
 
 ### Link
 

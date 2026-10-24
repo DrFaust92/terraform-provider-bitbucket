@@ -64,7 +64,7 @@ func Provider() *schema.Provider {
 			"oauth_token": {
 				Type:          schema.TypeString,
 				Optional:      true,
-				DefaultFunc:   schema.EnvDefaultFunc("BITBUCKET_OAUTH_TOKEN", nil),
+				DefaultFunc:   schema.MultiEnvDefaultFunc([]string{"BITBUCKET_OAUTH_TOKEN", "BITBUCKET_ACCESS_TOKEN"}, nil),
 				ConflictsWith: []string{"username", "password", "oauth_client_id", "oauth_client_secret"},
 			},
 		},

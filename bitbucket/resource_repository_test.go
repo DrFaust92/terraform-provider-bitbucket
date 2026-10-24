@@ -504,3 +504,65 @@ func testAccCheckBitbucketRepositoryGone(workspace, slug string) resource.TestCh
 		return nil
 	}
 }
+
+func TestAccBitbucketRepository_mainbranch(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	workspace := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_repository.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketRepositoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketRepoMainbranchConfig(workspace, rName, ""),
+				Check:  testAccCheckBitbucketRepositoryExists(resourceName),
+			},
+			{
+				Config: testAccBitbucketRepoMainbranchConfig(workspace, rName, "develop"),
+				Check:  resource.TestCheckResourceAttr(resourceName, "mainbranch", "develop"),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func testAccBitbucketRepoMainbranchConfig(workspace, rName, mainbranch string) string {
+	branchLine := ""
+	if mainbranch != "" {
+		branchLine = fmt.Sprintf("mainbranch = %q", mainbranch)
+	}
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+  %[3]s
+}
+
+resource "bitbucket_commit_file" "main" {
+  filename       = "README.md"
+  content        = "main"
+  repo_slug      = bitbucket_repository.test.slug
+  workspace      = bitbucket_repository.test.owner
+  commit_author  = "Unit test <unit@test.local>"
+  branch         = "main"
+  commit_message = "create main"
+}
+
+resource "bitbucket_commit_file" "develop" {
+  filename       = "DEVELOP.md"
+  content        = "develop"
+  repo_slug      = bitbucket_repository.test.slug
+  workspace      = bitbucket_repository.test.owner
+  commit_author  = "Unit test <unit@test.local>"
+  branch         = "develop"
+  commit_message = "create develop"
+  depends_on     = [bitbucket_commit_file.main]
+}
+`, workspace, rName, branchLine)
+}

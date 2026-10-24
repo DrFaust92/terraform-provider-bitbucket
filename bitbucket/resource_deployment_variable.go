@@ -12,6 +12,7 @@ import (
 	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceDeploymentVariable() *schema.Resource {
@@ -26,7 +27,7 @@ func resourceDeploymentVariable() *schema.Resource {
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				idParts := strings.Split(d.Id(), "/")
 				if len(idParts) != 3 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
-					return nil, fmt.Errorf("unexpected format of ID (%q), expected DEPLOYMENT-ID/DEPLOYMENT-VARIABLE-ID", d.Id())
+					return nil, fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG:DEPLOYMENT-UUID/VARIABLE-UUID", d.Id())
 				}
 				d.SetId(idParts[2])
 				d.Set("deployment", strings.Join([]string{idParts[0], idParts[1]}, "/"))
@@ -57,8 +58,9 @@ func resourceDeploymentVariable() *schema.Resource {
 				Default:  false,
 			},
 			"deployment": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringMatch(deploymentIdPattern, "must be the bitbucket_deployment id (WORKSPACE/REPO-SLUG:{UUID}), e.g. bitbucket_deployment.example.id"),
 			},
 		},
 	}
@@ -73,17 +75,15 @@ func newDeploymentVariableFromResource(d *schema.ResourceData) *bitbucket.Deploy
 	return dk
 }
 
-func parseDeploymentId(str string) (repository string, deployment string) {
-	parts := strings.SplitN(str, ":", 2)
-	return parts[0], parts[1]
-}
-
 func resourceDeploymentVariableCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(Clients).genClient
 	pipeApi := c.ApiClient.PipelinesApi
 	rvcr := newDeploymentVariableFromResource(d)
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -105,7 +105,10 @@ func resourceDeploymentVariableRead(ctx context.Context, d *schema.ResourceData,
 	c := m.(Clients).genClient
 	pipeApi := c.ApiClient.PipelinesApi
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -160,7 +163,10 @@ func resourceDeploymentVariableUpdate(ctx context.Context, d *schema.ResourceDat
 	pipeApi := c.ApiClient.PipelinesApi
 	rvcr := newDeploymentVariableFromResource(d)
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -178,7 +184,10 @@ func resourceDeploymentVariableDelete(ctx context.Context, d *schema.ResourceDat
 	c := m.(Clients).genClient
 	pipeApi := c.ApiClient.PipelinesApi
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)

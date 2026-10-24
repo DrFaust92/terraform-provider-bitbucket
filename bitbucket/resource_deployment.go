@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -71,9 +72,10 @@ func resourceDeployment() *schema.Resource {
 					false),
 			},
 			"repository": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:         schema.TypeString,
+				Required:     true,
+				ForceNew:     true,
+				ValidateFunc: validation.StringMatch(repositoryIdPattern, "must be WORKSPACE/REPO-SLUG, e.g. bitbucket_repository.example.id"),
 			},
 			"restrictions": {
 				Type:     schema.TypeList,
@@ -279,11 +281,16 @@ func flattenRestrictions(rp *Restrictions) []interface{} {
 	return []interface{}{m}
 }
 
+var (
+	repositoryIdPattern = regexp.MustCompile(`^[^/]+/[^/:]+$`)
+	deploymentIdPattern = regexp.MustCompile(`^[^/]+/[^/:]+:[^/:]+$`)
+)
+
 func deploymentId(id string) (string, string, error) {
 	parts := strings.Split(id, ":")
 
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("unexpected format of ID (%q), expected REPO-ID:DEPLOYMENT-UUID", id)
+		return "", "", fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG:DEPLOYMENT-UUID", id)
 	}
 
 	return parts[0], parts[1], nil
