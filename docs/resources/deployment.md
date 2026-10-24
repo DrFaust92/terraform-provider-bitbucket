@@ -34,7 +34,7 @@ resource "bitbucket_deployment" "test" {
 
 * `name` - (Required) The name of the deployment environment
 * `stage` - (Required) The stage (Test, Staging, Production)
-* `repository` - (Required) The repository ID to which you want to assign this deployment environment to
+* `repository` - (Required) The repository ID (`workspace/repo-slug`, e.g. `bitbucket_repository.example.id`) to which you want to assign this deployment environment to.
 * `restrictions` - (Optional) Deployment restrictions. See [Restrictions](#restrictions) below.
 
 ### Restrictions
@@ -47,8 +47,8 @@ resource "bitbucket_deployment" "test" {
 
 ## Import
 
-Deployments can be imported using their `repository/uuid` ID, e.g.
+Deployments can be imported using their `workspace/repo-slug:{uuid}` ID, e.g.
 
 ```sh
-terraform import bitbucket_deployment.example repository/uuid
+terraform import bitbucket_deployment.example 'my-workspace/my-repo:{c8d9e8d4-5e2f-4b55-9f3a-3c4d5e6f7a8b}'
 ```

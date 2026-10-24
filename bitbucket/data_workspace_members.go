@@ -3,9 +3,9 @@ package bitbucket
 import (
 	"context"
 	"log"
+	"net/http"
 
 	"github.com/DrFaust92/bitbucket-go-client"
-	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -60,8 +60,17 @@ func dataReadWorkspaceMembers(ctx context.Context, d *schema.ResourceData, m int
 	var accounts []bitbucket.Account
 	options := bitbucket.WorkspacesApiWorkspacesWorkspaceMembersGetOpts{}
 
+	client := m.(Clients).httpClient
+	next := ""
 	for {
-		flattenAccountsReq, res, err := workspaceApi.WorkspacesWorkspaceMembersGet(c.AuthContext, workspace, &options)
+		var flattenAccountsReq bitbucket.PaginatedWorkspaceMemberships
+		var res *http.Response
+		var err error
+		if next == "" {
+			flattenAccountsReq, res, err = workspaceApi.WorkspacesWorkspaceMembersGet(c.AuthContext, workspace, &options)
+		} else {
+			res, err = client.GetNext(next, &flattenAccountsReq)
+		}
 		if err := handleClientError(res, err); err != nil {
 			return diag.FromErr(err)
 		}
@@ -71,12 +80,10 @@ func dataReadWorkspaceMembers(ctx context.Context, d *schema.ResourceData, m int
 			accounts = append(accounts, *member.User)
 		}
 
-		if flattenAccountsReq.Next != "" {
-			nextPage := flattenAccountsReq.Page + 1
-			options.Page = optional.NewInt32(nextPage)
-		} else {
+		if flattenAccountsReq.Next == "" {
 			break
 		}
+		next = flattenAccountsReq.Next
 	}
 
 	d.SetId(workspace)

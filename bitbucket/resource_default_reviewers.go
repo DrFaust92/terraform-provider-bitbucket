@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
-	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -75,8 +74,17 @@ func resourceDefaultReviewersRead(ctx context.Context, d *schema.ResourceData, m
 
 	var terraformReviewers []string
 
+	client := m.(Clients).httpClient
+	next := ""
 	for {
-		reviewers, res, err := prApi.RepositoriesWorkspaceRepoSlugDefaultReviewersGet(c.AuthContext, repo, owner, &options)
+		var reviewers bitbucket.PaginatedAccounts
+		var res *http.Response
+		var err error
+		if next == "" {
+			reviewers, res, err = prApi.RepositoriesWorkspaceRepoSlugDefaultReviewersGet(c.AuthContext, repo, owner, &options)
+		} else {
+			res, err = client.GetNext(next, &reviewers)
+		}
 		if res != nil && res.StatusCode == http.StatusNotFound {
 			log.Printf("[WARN] Default Reviewers (%s) not found, removing from state", d.Id())
 			d.SetId("")
@@ -91,12 +99,10 @@ func resourceDefaultReviewersRead(ctx context.Context, d *schema.ResourceData, m
 			terraformReviewers = append(terraformReviewers, reviewer.Uuid)
 		}
 
-		if reviewers.Next != "" {
-			nextPage := reviewers.Page + 1
-			options.Page = optional.NewInt32(nextPage)
-		} else {
+		if reviewers.Next == "" {
 			break
 		}
+		next = reviewers.Next
 	}
 
 	d.Set("owner", owner)

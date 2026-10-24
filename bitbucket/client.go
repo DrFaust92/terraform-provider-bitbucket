@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strings"
 
 	"golang.org/x/oauth2"
 )
@@ -132,6 +133,21 @@ func (c *Client) Do(method, endpoint string, payload *bytes.Buffer, contentType 
 }
 
 // Get is just a helper method to do but with a GET verb
+func (c *Client) GetNext(next string, out interface{}) (*http.Response, error) {
+	endpoint, ok := strings.CutPrefix(next, BitbucketEndpoint)
+	if !ok {
+		return nil, fmt.Errorf("unexpected pagination link %q", next)
+	}
+
+	res, err := c.Get(endpoint)
+	if err != nil {
+		return res, err
+	}
+	defer res.Body.Close()
+
+	return res, json.NewDecoder(res.Body).Decode(out)
+}
+
 func (c *Client) Get(endpoint string) (*http.Response, error) {
 	return c.Do("GET", endpoint, nil, "application/json")
 }

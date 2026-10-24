@@ -127,7 +127,10 @@ func testAccCheckBitbucketDeploymentVariableDestroy(s *terraform.State) error {
 			continue
 		}
 
-		repository, deployment := parseDeploymentId(rs.Primary.Attributes["deployment"])
+		repository, deployment, err := deploymentId(rs.Primary.Attributes["deployment"])
+		if err != nil {
+			return err
+		}
 		workspace, repoSlug, err := deployVarId(repository)
 		if err != nil {
 			return err

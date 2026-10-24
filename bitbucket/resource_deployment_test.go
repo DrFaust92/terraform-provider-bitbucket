@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -204,6 +205,37 @@ func TestAccBitbucketDeployment_renameKeepsRestrictions(t *testing.T) {
 			{
 				Config:   testAccBitbucketDeploymentAdmin(owner, rName, newName, true),
 				PlanOnly: true,
+			},
+		},
+	})
+}
+
+func TestAccBitbucketDeployment_invalidIds(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "bitbucket_deployment" "test" {
+  name       = "invalid"
+  stage      = "Staging"
+  repository = "just-a-repo-name"
+}
+`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`must be WORKSPACE/REPO-SLUG`),
+			},
+			{
+				Config: `
+resource "bitbucket_deployment_variable" "test" {
+  deployment = "{c8d9e8d4-5e2f-4b55-9f3a-3c4d5e6f7a8b}"
+  key        = "K"
+  value      = "v"
+}
+`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`must be the bitbucket_deployment id`),
 			},
 		},
 	})

@@ -29,6 +29,11 @@ provider "bitbucket" {
   password = "ATATT3x..."            # API token from https://id.atlassian.com/manage-profile/security/api-tokens
 }
 
+# Alternatively, using a workspace, project or repository access token
+provider "bitbucket" {
+  oauth_token = "ATCTT3x..."
+}
+
 resource "bitbucket_repository" "illusions" {
   owner      = "theleagueofmagicians"
   name       = "illusions"
@@ -76,9 +81,12 @@ The following arguments are supported in the `provider` block:
   You can also set this via the `BITBUCKET_OAUTH_CLIENT_SECRET` environment
   variable. If configured, requires `oauth_client_id` to be configured as well.
 
-* `oauth_token` - (Optional) An OAuth access token used for authentication via
-  [OAuth](https://developer.atlassian.com/cloud/bitbucket/rest/intro/#oauth-2-0).
-  You can also set this via the `BITBUCKET_OAUTH_TOKEN` environment variable.
+* `oauth_token` - (Optional) An OAuth access token, or a workspace, project or
+  repository [access token](https://support.atlassian.com/bitbucket-cloud/docs/access-tokens/),
+  sent as a bearer token. You can also set this via the `BITBUCKET_OAUTH_TOKEN`
+  or `BITBUCKET_ACCESS_TOKEN` environment variable. Access tokens are not tied
+  to a user, so `bitbucket_current_user`, the group resources and data sources,
+  and deploy keys don't work with them.
 
 ## Permission Scopes
 
