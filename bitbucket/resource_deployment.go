@@ -36,8 +36,8 @@ type Changes struct {
 }
 
 type Change struct {
-	Name         string       `json:"name,omitempty"`
-	Restrictions Restrictions `json:"restrictions,omitempty"`
+	Name         string        `json:"name,omitempty"`
+	Restrictions *Restrictions `json:"restrictions,omitempty"`
 }
 
 func resourceDeployment() *schema.Resource {
@@ -208,7 +208,8 @@ func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, m int
 	}
 
 	if d.HasChange("restrictions") {
-		rvcr.Change.Restrictions = expandRestrictions(d.Get("restrictions").([]interface{}))
+		rest := expandRestrictions(d.Get("restrictions").([]interface{}))
+		rvcr.Change.Restrictions = &rest
 	}
 
 	log.Printf("[DEBUG] deployment update req: %#v", rvcr)
@@ -232,8 +233,8 @@ func resourceDeploymentUpdate(ctx context.Context, d *schema.ResourceData, m int
 		return diag.FromErr(err)
 	}
 
-	if req.StatusCode != 200 {
-		return nil
+	if req.StatusCode >= 300 {
+		return diag.Errorf("unexpected status updating deployment (%s): %s", d.Id(), req.Status)
 	}
 
 	return resourceDeploymentRead(ctx, d, m)

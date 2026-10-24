@@ -254,10 +254,12 @@ func TestAccBitbucketRepository_inherit(t *testing.T) {
 }
 
 func TestAccBitbucketRepository_wrongCredential(t *testing.T) {
-	password := os.Getenv("BITBUCKET_PASSWORD")
+	if os.Getenv("BITBUCKET_USERNAME") == "" {
+		t.Skip("requires basic auth credentials")
+	}
 
 	workspace := os.Getenv("BITBUCKET_TEAM")
-	os.Setenv("BITBUCKET_PASSWORD", "WRONG")
+	t.Setenv("BITBUCKET_PASSWORD", "WRONG")
 	rName := acctest.RandomWithPrefix("tf-test")
 
 	resource.Test(t, resource.TestCase{
@@ -271,8 +273,6 @@ func TestAccBitbucketRepository_wrongCredential(t *testing.T) {
 			},
 		},
 	})
-
-	os.Setenv("BITBUCKET_PASSWORD", password)
 }
 
 func TestAccBitbucketRepository_duplicate(t *testing.T) {
@@ -340,7 +340,7 @@ resource "bitbucket_repository" "test" {
 
   link {
     avatar {
-      href = "https://d301sr5gafysq2.cloudfront.net/dfb18959be9c/img/repo-avatars/python.png"
+      href = "https://github.githubassets.com/favicons/favicon.png"
 	}
   }  
 }
@@ -405,6 +405,101 @@ func testAccCheckBitbucketRepositoryExists(n string) resource.TestCheckFunc {
 		}
 		if rs.Primary.ID == "" {
 			return fmt.Errorf("No repository ID is set")
+		}
+		return nil
+	}
+}
+
+func TestAccBitbucketRepository_rename(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	newName := "TF Test " + acctest.RandString(6) + " Renamed"
+	workspace := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_repository.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketRepositoryDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketRepoPipelinesConfig(workspace, rName, false),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketRepositoryExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "slug", rName),
+				),
+			},
+			{
+				Config: testAccBitbucketRepoPipelinesConfig(workspace, newName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketRepositoryExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "name", newName),
+					resource.TestCheckResourceAttr(resourceName, "slug", computeSlug(newName)),
+					resource.TestCheckResourceAttr(resourceName, "id", workspace+"/"+computeSlug(newName)),
+					resource.TestCheckResourceAttr(resourceName, "pipelines_enabled", "true"),
+					testAccCheckBitbucketRepositoryGone(workspace, rName),
+				),
+			},
+			{
+				ResourceName:            resourceName,
+				ImportState:             true,
+				ImportStateVerify:       true,
+				ImportStateVerifyIgnore: []string{"slug"},
+			},
+			{
+				Config:      testAccBitbucketRepoPipelinesConfig(workspace+"-other", newName, true),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`changing owner from .* is not supported`),
+			},
+			{
+				PreConfig: func() {
+					c := testAccProvider.Meta().(Clients).genClient
+					if _, err := c.ApiClient.RepositoriesApi.RepositoriesWorkspaceRepoSlugDelete(c.AuthContext, computeSlug(newName), workspace, nil); err != nil {
+						t.Fatalf("deleting repository out of band: %s", err)
+					}
+				},
+				Config:             testAccBitbucketRepoPipelinesConfig(workspace, newName, true),
+				PlanOnly:           true,
+				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+func TestAccBitbucketRepository_invalidImportId(t *testing.T) {
+	workspace := os.Getenv("BITBUCKET_TEAM")
+	rName := acctest.RandomWithPrefix("tf-test")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config:        testAccBitbucketRepoConfig(workspace, rName),
+				ResourceName:  "bitbucket_repository.test",
+				ImportState:   true,
+				ImportStateId: "no-slash-here",
+				ExpectError:   regexp.MustCompile(`expected WORKSPACE/REPO-SLUG`),
+			},
+		},
+	})
+}
+
+func testAccBitbucketRepoPipelinesConfig(workspace, rName string, pipelines bool) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner             = %[1]q
+  name              = %[2]q
+  pipelines_enabled = %[3]t
+}
+`, workspace, rName, pipelines)
+}
+
+func testAccCheckBitbucketRepositoryGone(workspace, slug string) resource.TestCheckFunc {
+	return func(s *terraform.State) error {
+		c := testAccProvider.Meta().(Clients).genClient
+		_, res, _ := c.ApiClient.RepositoriesApi.RepositoriesWorkspaceRepoSlugGet(c.AuthContext, slug, workspace)
+		if res == nil || res.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("repository %s/%s still exists after rename", workspace, slug)
 		}
 		return nil
 	}

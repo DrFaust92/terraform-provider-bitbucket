@@ -18,8 +18,9 @@ import (
 func resourceForkedRepository() *schema.Resource {
 	return &schema.Resource{
 		CreateContext:        resourceForkedRepositoryCreate,
-		UpdateWithoutTimeout: resourceRepositoryUpdate,
+		UpdateWithoutTimeout: resourceForkedRepositoryUpdate,
 		ReadContext:          resourceForkedRepositoryRead,
+		CustomizeDiff:        denyOwnerChange,
 		DeleteWithoutTimeout: resourceRepositoryDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -223,7 +224,7 @@ func resourceForkedRepositoryCreate(ctx context.Context, d *schema.ResourceData,
 	//nolint:all
 	retryErr := resource.RetryContext(ctx, d.Timeout(schema.TimeoutCreate), func() *resource.RetryError {
 		_, pipelineResponse, err := pipeApi.UpdateRepositoryPipelineConfig(c.AuthContext, *pipelinesConfig, workspace, repoSlug)
-		if pipelineResponse.StatusCode == 403 || pipelineResponse.StatusCode == 404 {
+		if pipelineResponse != nil && (pipelineResponse.StatusCode == 403 || pipelineResponse.StatusCode == 404) {
 			return resource.RetryableError(
 				fmt.Errorf("permissions error setting Pipelines config, retrying"),
 			)
@@ -238,7 +239,14 @@ func resourceForkedRepositoryCreate(ctx context.Context, d *schema.ResourceData,
 		return diag.FromErr(retryErr)
 	}
 
-	return resourceRepositoryRead(ctx, d, m)
+	return resourceForkedRepositoryRead(ctx, d, m)
+}
+
+func resourceForkedRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	if diags := updateRepository(ctx, d, m); diags.HasError() {
+		return diags
+	}
+	return resourceForkedRepositoryRead(ctx, d, m)
 }
 
 func resourceForkedRepositoryRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -312,7 +320,7 @@ func resourceForkedRepositoryRead(ctx context.Context, d *schema.ResourceData, m
 	d.Set("link", flattenLinks(repoRes.Links))
 
 	pipelinesConfigReq, res, err := pipeApi.GetRepositoryPipelineConfig(c.AuthContext, workspace, repoSlug)
-	if err := handleClientError(res, err); err != nil && res.StatusCode != http.StatusNotFound {
+	if err := handleClientError(res, err); err != nil && (res == nil || res.StatusCode != http.StatusNotFound) {
 		return diag.FromErr(err)
 	}
 

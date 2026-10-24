@@ -84,6 +84,7 @@ func TestExtractErrorMessage(t *testing.T) {
 		`{"type":"error","error":{"message":"Bad request","detail":"The request body contains invalid properties","data":{"arguments":{"secured-required":"Property secured is required"}}}}`: `Bad request: The request body contains invalid properties {"arguments":{"secured-required":"Property secured is required"}}`,
 		`{"type":"error","error":{"message":"Repository not found"}}`:                                                                              "Repository not found",
 		`{"type":"error","error":{"message":"Your credentials lack scopes","detail":{"required":["pipeline:variable"],"granted":["repository"]}}}`: "Your credentials lack scopes Required: [pipeline:variable] Granted: [repository]",
+		`{"type":"error","error":{"message":"Bad request","fields":{"uuid":"extra keys not allowed"}}}`:                                            `Bad request {"uuid":"extra keys not allowed"}`,
 		`{"type":"error"}`:  `{"type":"error"}`,
 		`<html>oops</html>`: `<html>oops</html>`,
 	}
@@ -137,5 +138,20 @@ func TestSshKeyBody(t *testing.T) {
 		if got := sshKeyBody(in); got != want {
 			t.Errorf("sshKeyBody(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestClientErrorIncludesFields(t *testing.T) {
+	c := &Client{HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		return &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(`{"type":"error","error":{"message":"Bad request","fields":{"uuid":"extra keys not allowed"}}}`)),
+			Request:    r,
+		}, nil
+	})}}
+
+	_, err := c.Get("2.0/thing")
+	if err == nil || !strings.Contains(err.Error(), `Bad request {"uuid":"extra keys not allowed"}`) {
+		t.Errorf("expected error fields, got %v", err)
 	}
 }

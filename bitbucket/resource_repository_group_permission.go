@@ -125,7 +125,7 @@ func resourceRepositoryGroupPermissionRead(ctx context.Context, d *schema.Resour
 		groupSlug,
 	))
 
-	if permissionReq.StatusCode == http.StatusNotFound {
+	if permissionReq != nil && permissionReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Repository Group Permission (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
