@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/hashicorp/go-retryablehttp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	oauth2bitbucket "golang.org/x/oauth2/bitbucket"
 	oauth2clientcreds "golang.org/x/oauth2/clientcredentials"
@@ -117,11 +119,36 @@ func Provider() *schema.Provider {
 	}
 }
 
+func newHTTPClient() *http.Client {
+	client := retryablehttp.NewClient()
+	client.HTTPClient = &http.Client{}
+	client.Logger = nil
+	client.RetryMax = 5
+	client.RetryWaitMax = 10 * time.Second
+	client.RequestLogHook = func(_ retryablehttp.Logger, req *http.Request, attempt int) {
+		if attempt > 0 {
+			log.Printf("[DEBUG] Bitbucket rate limited, retrying %s %s (attempt %d)", req.Method, req.URL.Path, attempt)
+		}
+	}
+	client.CheckRetry = func(ctx context.Context, response *http.Response, err error) (bool, error) {
+		if err != nil {
+			return false, err
+		}
+		return response.StatusCode == http.StatusTooManyRequests, nil
+	}
+	client.Backoff = func(waitMin, waitMax time.Duration, attempt int, resp *http.Response) time.Duration {
+		return min(retryablehttp.RateLimitLinearJitterBackoff(waitMin, waitMax, attempt, resp), waitMax)
+	}
+	client.ErrorHandler = retryablehttp.PassthroughErrorHandler
+	return client.StandardClient()
+}
+
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	authCtx := context.Background()
 
+	httpClient := newHTTPClient()
 	client := &Client{
-		HTTPClient: &http.Client{},
+		HTTPClient: httpClient,
 	}
 
 	if username, ok := d.GetOk("username"); ok {
@@ -168,6 +195,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	conf := bitbucket.NewConfiguration()
+	conf.HTTPClient = httpClient
 	apiClient := ProviderConfig{
 		ApiClient:   bitbucket.NewAPIClient(conf),
 		AuthContext: authCtx,
