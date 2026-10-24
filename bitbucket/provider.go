@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/DrFaust92/bitbucket-go-client"
 	"github.com/hashicorp/go-retryablehttp"
@@ -120,15 +121,24 @@ func Provider() *schema.Provider {
 
 func newHTTPClient() *http.Client {
 	client := retryablehttp.NewClient()
+	client.HTTPClient = &http.Client{}
 	client.Logger = nil
-	client.RetryMax = 10
+	client.RetryMax = 5
+	client.RetryWaitMax = 10 * time.Second
+	client.RequestLogHook = func(_ retryablehttp.Logger, req *http.Request, attempt int) {
+		if attempt > 0 {
+			log.Printf("[DEBUG] Bitbucket rate limited, retrying %s %s (attempt %d)", req.Method, req.URL.Path, attempt)
+		}
+	}
 	client.CheckRetry = func(ctx context.Context, response *http.Response, err error) (bool, error) {
 		if err != nil {
 			return false, err
 		}
 		return response.StatusCode == http.StatusTooManyRequests, nil
 	}
-	client.Backoff = retryablehttp.RateLimitLinearJitterBackoff
+	client.Backoff = func(waitMin, waitMax time.Duration, attempt int, resp *http.Response) time.Duration {
+		return min(retryablehttp.RateLimitLinearJitterBackoff(waitMin, waitMax, attempt, resp), waitMax)
+	}
 	client.ErrorHandler = retryablehttp.PassthroughErrorHandler
 	return client.StandardClient()
 }
