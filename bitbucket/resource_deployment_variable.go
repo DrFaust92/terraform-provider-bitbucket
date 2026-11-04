@@ -9,11 +9,15 @@ import (
 	"time"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func resourceDeploymentVariable() *schema.Resource {
+	valueWO, valueWOVersion := writeOnlySchemas("value")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceDeploymentVariableCreate,
 		UpdateWithoutTimeout: resourceDeploymentVariableUpdate,
@@ -23,7 +27,7 @@ func resourceDeploymentVariable() *schema.Resource {
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				idParts := strings.Split(d.Id(), "/")
 				if len(idParts) != 3 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" {
-					return nil, fmt.Errorf("unexpected format of ID (%q), expected DEPLOYMENT-ID/DEPLOYMENT-VARIABLE-ID", d.Id())
+					return nil, fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG:DEPLOYMENT-UUID/VARIABLE-UUID", d.Id())
 				}
 				d.SetId(idParts[2])
 				d.Set("deployment", strings.Join([]string{idParts[0], idParts[1]}, "/"))
@@ -41,18 +45,22 @@ func resourceDeploymentVariable() *schema.Resource {
 				Required: true,
 			},
 			"value": {
-				Type:      schema.TypeString,
-				Required:  true,
-				Sensitive: true,
+				Type:         schema.TypeString,
+				Optional:     true,
+				Sensitive:    true,
+				ExactlyOneOf: []string{"value", "value_wo"},
 			},
+			"value_wo":         valueWO,
+			"value_wo_version": valueWOVersion,
 			"secured": {
 				Type:     schema.TypeBool,
 				Optional: true,
 				Default:  false,
 			},
 			"deployment": {
-				Type:     schema.TypeString,
-				Required: true,
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringMatch(deploymentIdPattern, "must be the bitbucket_deployment id (WORKSPACE/REPO-SLUG:{UUID}), e.g. bitbucket_deployment.example.id"),
 			},
 		},
 	}
@@ -61,15 +69,10 @@ func resourceDeploymentVariable() *schema.Resource {
 func newDeploymentVariableFromResource(d *schema.ResourceData) *bitbucket.DeploymentVariable {
 	dk := &bitbucket.DeploymentVariable{
 		Key:     d.Get("key").(string),
-		Value:   d.Get("value").(string),
+		Value:   writeOnlyOrValue(d, "value"),
 		Secured: d.Get("secured").(bool),
 	}
 	return dk
-}
-
-func parseDeploymentId(str string) (repository string, deployment string) {
-	parts := strings.SplitN(str, ":", 2)
-	return parts[0], parts[1]
 }
 
 func resourceDeploymentVariableCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -77,7 +80,10 @@ func resourceDeploymentVariableCreate(ctx context.Context, d *schema.ResourceDat
 	pipeApi := c.ApiClient.PipelinesApi
 	rvcr := newDeploymentVariableFromResource(d)
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -99,35 +105,35 @@ func resourceDeploymentVariableRead(ctx context.Context, d *schema.ResourceData,
 	c := m.(Clients).genClient
 	pipeApi := c.ApiClient.PipelinesApi
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	rvRes, res, err := pipeApi.GetDeploymentVariables(c.AuthContext, workspace, repoSlug, deployment, nil)
-
-	if res != nil && res.StatusCode == http.StatusNotFound {
-		log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
-		d.SetId("")
-		return nil
-	}
-
-	if err := handleClientError(res, err); err != nil {
-		return diag.FromErr(err)
-	}
-
-	if rvRes.Size < 1 {
-		log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
-		d.SetId("")
-		return nil
-	}
-
 	var deployVar *bitbucket.DeploymentVariable
 
-	for _, rv := range rvRes.Values {
-		if rv.Uuid == d.Id() {
-			deployVar = &rv
+	// The API returns 10 variables per page, follow pages until the variable is found.
+	for page := int32(1); deployVar == nil; page++ {
+		opts := &bitbucket.PipelinesApiGetDeploymentVariablesOpts{Page: optional.NewInt32(page)}
+		rvRes, res, err := pipeApi.GetDeploymentVariables(c.AuthContext, workspace, repoSlug, deployment, opts)
+
+		if res != nil && res.StatusCode == http.StatusNotFound {
+			log.Printf("[WARN] Deployment Variable (%s) not found, removing from state", d.Id())
+			d.SetId("")
+			return nil
+		}
+
+		if err := handleClientError(res, err); err != nil {
+			return diag.FromErr(err)
+		}
+
+		deployVar = findDeploymentVariable(rvRes.Values, d.Id())
+
+		if rvRes.Next == "" || len(rvRes.Values) == 0 {
 			break
 		}
 	}
@@ -142,7 +148,8 @@ func resourceDeploymentVariableRead(ctx context.Context, d *schema.ResourceData,
 	d.Set("uuid", deployVar.Uuid)
 	d.Set("secured", deployVar.Secured)
 
-	if !deployVar.Secured {
+	// With value_wo the value must not be stored in state.
+	if !deployVar.Secured && !usesWriteOnly(d, "value") {
 		d.Set("value", deployVar.Value)
 	} else {
 		d.Set("value", d.Get("value").(string))
@@ -156,7 +163,10 @@ func resourceDeploymentVariableUpdate(ctx context.Context, d *schema.ResourceDat
 	pipeApi := c.ApiClient.PipelinesApi
 	rvcr := newDeploymentVariableFromResource(d)
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -174,7 +184,10 @@ func resourceDeploymentVariableDelete(ctx context.Context, d *schema.ResourceDat
 	c := m.(Clients).genClient
 	pipeApi := c.ApiClient.PipelinesApi
 
-	repository, deployment := parseDeploymentId(d.Get("deployment").(string))
+	repository, deployment, err := deploymentId(d.Get("deployment").(string))
+	if err != nil {
+		return diag.FromErr(err)
+	}
 	workspace, repoSlug, err := deployVarId(repository)
 	if err != nil {
 		return diag.FromErr(err)
@@ -195,4 +208,14 @@ func deployVarId(repo string) (string, string, error) {
 	} else {
 		return "", "", fmt.Errorf("incorrect ID format, should match `owner/key`")
 	}
+}
+
+func findDeploymentVariable(vars []bitbucket.DeploymentVariable, uuid string) *bitbucket.DeploymentVariable {
+	for i := range vars {
+		if vars[i].Uuid == uuid {
+			return &vars[i]
+		}
+	}
+
+	return nil
 }

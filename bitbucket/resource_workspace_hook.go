@@ -17,6 +17,8 @@ import (
 )
 
 func resourceWorkspaceHook() *schema.Resource {
+	secretWO, secretWOVersion := writeOnlySchemas("secret")
+
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceWorkspaceHookCreate,
 		ReadWithoutTimeout:   resourceWorkspaceHookRead,
@@ -62,6 +64,8 @@ func resourceWorkspaceHook() *schema.Resource {
 				Optional:  true,
 				Sensitive: true,
 			},
+			"secret_wo":         secretWO,
+			"secret_wo_version": secretWOVersion,
 			"uuid": {
 				Type:     schema.TypeString,
 				Computed: true,
@@ -154,7 +158,7 @@ func resourceWorkspaceHookRead(ctx context.Context, d *schema.ResourceData, m in
 		url.PathEscape(d.Id()),
 	))
 
-	if hookReq.StatusCode == http.StatusNotFound {
+	if hookReq != nil && hookReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Repository Hook (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil

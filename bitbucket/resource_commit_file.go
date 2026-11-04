@@ -7,6 +7,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/DrFaust92/bitbucket-go-client"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -80,6 +81,9 @@ func resourceCommitFilePut(ctx context.Context, d *schema.ResourceData, m interf
 	commitMessage := d.Get("commit_message").(string)
 	commitAuthor := d.Get("commit_author").(string)
 
+	unlock := lockCommitBranch(workspace, repoSlug, branch)
+	defer unlock()
+
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, _ := writer.CreateFormFile(filename, filename)
@@ -87,7 +91,6 @@ func resourceCommitFilePut(ctx context.Context, d *schema.ResourceData, m interf
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	defer writer.Close()
 
 	messageFormField, err := writer.CreateFormField("message")
 	if err != nil {
@@ -114,6 +117,9 @@ func resourceCommitFilePut(ctx context.Context, d *schema.ResourceData, m interf
 	if err != nil {
 		return diag.FromErr(err)
 	}
+	if err := writer.Close(); err != nil {
+		return diag.FromErr(err)
+	}
 
 	res, err := client.PostWithContentType(fmt.Sprintf("2.0/repositories/%s/%s/src",
 		workspace,
@@ -125,12 +131,15 @@ func resourceCommitFilePut(ctx context.Context, d *schema.ResourceData, m interf
 	}
 
 	if res.StatusCode != http.StatusCreated {
-		return diag.FromErr(fmt.Errorf(""))
+		return diag.Errorf("unexpected status committing %s to %s/%s@%s: %s", filename, workspace, repoSlug, branch, res.Status)
 	}
 
 	d.SetId(fmt.Sprintf("%s/%s/%s/%s", workspace, repoSlug, branch, filename))
 
-	location, _ := res.Location()
+	location, err := res.Location()
+	if err != nil {
+		return diag.Errorf("committing %s to %s/%s@%s: no commit location in response: %s", filename, workspace, repoSlug, branch, err)
+	}
 	splitPath := strings.Split(location.Path, "/")
 	d.Set("commit_sha", splitPath[len(splitPath)-1])
 
@@ -157,4 +166,12 @@ func resourceCommitFileRead(ctx context.Context, d *schema.ResourceData, m inter
 
 func resourceCommitFileDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	return nil
+}
+
+var commitBranchLocks sync.Map
+
+func lockCommitBranch(workspace, repoSlug, branch string) func() {
+	mu, _ := commitBranchLocks.LoadOrStore(workspace+"/"+repoSlug+"@"+branch, &sync.Mutex{})
+	mu.(*sync.Mutex).Lock()
+	return mu.(*sync.Mutex).Unlock
 }

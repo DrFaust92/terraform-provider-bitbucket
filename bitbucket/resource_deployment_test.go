@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/acctest"
@@ -172,4 +173,70 @@ resource "bitbucket_deployment" "test" {
   }
 }
 `, workspace, repoName, deployName, admin)
+}
+
+func TestAccBitbucketDeployment_renameKeepsRestrictions(t *testing.T) {
+	var deploy Deployment
+	resourceName := "bitbucket_deployment.test"
+	rName := acctest.RandomWithPrefix("tf-test")
+	newName := rName + "-renamed"
+	owner := os.Getenv("BITBUCKET_TEAM")
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketDeploymentDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketDeploymentAdmin(owner, rName, rName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketDeploymentExists(resourceName, &deploy),
+					resource.TestCheckResourceAttr(resourceName, "restrictions.0.admin_only", "true"),
+				),
+			},
+			{
+				Config: testAccBitbucketDeploymentAdmin(owner, rName, newName, true),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketDeploymentExists(resourceName, &deploy),
+					resource.TestCheckResourceAttr(resourceName, "name", newName),
+					resource.TestCheckResourceAttr(resourceName, "restrictions.0.admin_only", "true"),
+				),
+			},
+			{
+				Config:   testAccBitbucketDeploymentAdmin(owner, rName, newName, true),
+				PlanOnly: true,
+			},
+		},
+	})
+}
+
+func TestAccBitbucketDeployment_invalidIds(t *testing.T) {
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: `
+resource "bitbucket_deployment" "test" {
+  name       = "invalid"
+  stage      = "Staging"
+  repository = "just-a-repo-name"
+}
+`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`must be WORKSPACE/REPO-SLUG`),
+			},
+			{
+				Config: `
+resource "bitbucket_deployment_variable" "test" {
+  deployment = "{c8d9e8d4-5e2f-4b55-9f3a-3c4d5e6f7a8b}"
+  key        = "K"
+  value      = "v"
+}
+`,
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`must be the bitbucket_deployment id`),
+			},
+		},
+	})
 }

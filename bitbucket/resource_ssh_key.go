@@ -39,9 +39,10 @@ func resourceSshKey() *schema.Resource {
 				ForceNew: true,
 			},
 			"key": {
-				Type:     schema.TypeString,
-				Optional: true,
-				ForceNew: true,
+				Type:             schema.TypeString,
+				Optional:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: suppressSSHKeyCommentDiff,
 			},
 			"label": {
 				Type:     schema.TypeString,
@@ -106,7 +107,9 @@ func resourceSshKeysRead(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	d.Set("user", user)
-	d.Set("key", d.Get("key").(string))
+	if stateKey := d.Get("key").(string); sshKeyReq.Key != "" && (stateKey == "" || sshKeyBody(stateKey) != sshKeyBody(sshKeyReq.Key)) {
+		d.Set("key", sshKeyReq.Key)
+	}
 	d.Set("label", sshKeyReq.Label)
 	d.Set("uuid", sshKeyReq.Uuid)
 	d.Set("comment", sshKeyReq.Comment)

@@ -33,7 +33,9 @@ The following arguments are supported:
 * `workspace` - (Required) The Workspace where the repository resides.
 * `repository` - (Required) The Repository to create SSH key in.
 * `public_key` - (Required) The SSH public key value in OpenSSH format.
-* `private_key` - (Required) The SSH private key value in OpenSSH format.
+* `private_key` - (Optional) The SSH private key value in OpenSSH format.
+* `private_key_wo` - (Optional) Write-only alternative to `private_key`, never stored in Terraform state or plan output. Requires Terraform 1.11 or later. Conflicts with `private_key`. See [write-only arguments](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/write-only).
+* `private_key_wo_version` - (Optional) Required with `private_key_wo`. Terraform cannot detect changes to write-only values, change this value (e.g. `"2"`) to send an updated `private_key_wo`.
 
 ## Attributes Reference
 

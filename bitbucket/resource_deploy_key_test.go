@@ -44,6 +44,15 @@ func TestAccBitbucketDeployKey_basic(t *testing.T) {
 				ImportStateVerify:       true,
 				ImportStateVerifyIgnore: []string{"key"},
 			},
+			{
+				ResourceName:       resourceName,
+				ImportState:        true,
+				ImportStatePersist: true,
+			},
+			{
+				Config:   testAccBitbucketDeployKeyConfig(owner, rName, publicKey),
+				PlanOnly: true,
+			},
 		},
 	})
 }

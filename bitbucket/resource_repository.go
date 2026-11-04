@@ -23,6 +23,7 @@ func resourceRepository() *schema.Resource {
 		CreateWithoutTimeout: resourceRepositoryCreate,
 		UpdateWithoutTimeout: resourceRepositoryUpdate,
 		ReadWithoutTimeout:   resourceRepositoryRead,
+		CustomizeDiff:        denyOwnerChange,
 		DeleteWithoutTimeout: resourceRepositoryDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -76,6 +77,11 @@ func resourceRepository() *schema.Resource {
 				Optional:     true,
 				Default:      "allow_forks",
 				ValidateFunc: validation.StringInSlice([]string{"allow_forks", "no_public_forks", "no_forks"}, false),
+			},
+			"mainbranch": {
+				Type:     schema.TypeString,
+				Optional: true,
+				Computed: true,
 			},
 			"language": {
 				Type:     schema.TypeString,
@@ -173,22 +179,30 @@ func newRepositoryFromResource(d *schema.ResourceData) *bitbucket.Repository {
 		repo.Project = project
 	}
 
+	if v, ok := d.GetOk("mainbranch"); ok && v.(string) != "" && (d.IsNewResource() || d.HasChange("mainbranch")) {
+		repo.Mainbranch = &bitbucket.Branch{Type_: "branch", Name: v.(string)}
+	}
+
 	return repo
 }
 
 func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	if diags := updateRepository(ctx, d, m); diags.HasError() {
+		return diags
+	}
+	return resourceRepositoryRead(ctx, d, m)
+}
+
+func updateRepository(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	c := m.(Clients).genClient
 	repoApi := c.ApiClient.RepositoriesApi
 	pipeApi := c.ApiClient.PipelinesApi
 	client := m.(Clients).httpClient
 
-	var repoSlug string
-	repoSlug = d.Get("slug").(string)
-	if repoSlug == "" {
-		repoSlug = d.Get("name").(string)
+	workspace, repoSlug, err := repositoryId(d.Id())
+	if err != nil {
+		return diag.FromErr(err)
 	}
-	repoSlug = computeSlug(repoSlug)
-	workspace := d.Get("owner").(string)
 
 	if d.HasChangesExcept("pipelines_enabled", "inherit_default_merge_strategy", "inherit_branching_model") {
 		repository := newRepositoryFromResource(d)
@@ -196,23 +210,21 @@ func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m int
 		repoBody := &bitbucket.RepositoriesApiRepositoriesWorkspaceRepoSlugPutOpts{
 			Body: optional.NewInterface(repository),
 		}
-		_, res, err := repoApi.RepositoriesWorkspaceRepoSlugPut(c.AuthContext, repoSlug, workspace, repoBody)
+		repo, res, err := repoApi.RepositoriesWorkspaceRepoSlugPut(c.AuthContext, repoSlug, workspace, repoBody)
 		if err := handleClientError(res, err); err != nil {
 			return diag.FromErr(err)
 		}
+
+		if repo.Slug != "" && repo.Slug != repoSlug {
+			repoSlug = repo.Slug
+			d.SetId(fmt.Sprintf("%s/%s", workspace, repoSlug))
+		}
 	}
 
-	// Check if the "owner" or "name" properties have changed. If so:
-	// 1. Update the resource ID used by Terraform to track the resource
-	// 2. Update the workspace and repoSlug variables used to make API calls
-	if d.HasChange("owner") || d.HasChange("name") {
-		_, newWorkspace := d.GetChange("owner")
-		_, newRepoSlug := d.GetChange("name")
-		workspace = newWorkspace.(string)
-		repoSlug = newRepoSlug.(string)
-		newId := fmt.Sprintf("%s/%s", workspace, repoSlug)
-		log.Printf("[DEBUG] repo owner/name has changed; setting new resource ID: %s", newId)
-		d.SetId(newId)
+	if d.HasChange("website") {
+		if err := setRepositoryWebsite(client, workspace, repoSlug, d.Get("website").(string)); err != nil {
+			return diag.FromErr(err)
+		}
 	}
 
 	if d.HasChange("pipelines_enabled") {
@@ -249,7 +261,7 @@ func resourceRepositoryUpdate(ctx context.Context, d *schema.ResourceData, m int
 		}
 	}
 
-	return resourceRepositoryRead(ctx, d, m)
+	return nil
 }
 
 func resourceRepositoryCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -280,9 +292,14 @@ func resourceRepositoryCreate(ctx context.Context, d *schema.ResourceData, m int
 
 	d.SetId(fmt.Sprintf("%s/%s", d.Get("owner").(string), repoSlug))
 
-	// nolint:staticcheck
-	if v, ok := d.GetOkExists("pipelines_enabled"); ok {
-		pipelinesConfig := &bitbucket.PipelinesConfig{Enabled: v.(bool)}
+	if website := d.Get("website").(string); website != "" {
+		if err := setRepositoryWebsite(m.(Clients).httpClient, d.Get("owner").(string), repoSlug, website); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+
+	if d.Get("pipelines_enabled").(bool) {
+		pipelinesConfig := &bitbucket.PipelinesConfig{Enabled: true}
 
 		_, res, err := pipeApi.UpdateRepositoryPipelineConfig(c.AuthContext, *pipelinesConfig, workspace, repoSlug)
 		if err := handleClientError(res, err); err != nil {
@@ -325,17 +342,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 
 	workspace, repoSlug, err := repositoryId(d.Id())
 	if err != nil {
-		diag.FromErr(err)
-	}
-
-	// Check if the "owner" or "name" properties have changed. If so, update the
-	// the workspace and repoSlug variables used to make API calls.
-	if d.HasChange("owner") || d.HasChange("name") {
-		_, newWorkspace := d.GetChange("owner")
-		_, newRepoSlug := d.GetChange("name")
-		workspace = newWorkspace.(string)
-		repoSlug = newRepoSlug.(string)
-		log.Printf("[DEBUG] repo owner/name has changed to %s/%s", workspace, repoSlug)
+		return diag.FromErr(err)
 	}
 
 	if repoSlug == "" {
@@ -364,7 +371,12 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	d.Set("slug", repoRes.Slug)
 	d.Set("language", repoRes.Language)
 	d.Set("fork_policy", repoRes.ForkPolicy)
-	// d.Set("website", repoRes.Website)
+	if repoRes.Mainbranch != nil {
+		d.Set("mainbranch", repoRes.Mainbranch.Name)
+	}
+	if diags := readRepositoryWebsite(d, m.(Clients).httpClient, workspace, repoSlug); diags.HasError() {
+		return diags
+	}
 	d.Set("description", repoRes.Description)
 	d.Set("project_key", repoRes.Project.Key)
 	d.Set("uuid", repoRes.Uuid)
@@ -380,7 +392,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	d.Set("link", flattenLinks(repoRes.Links))
 
 	pipelinesConfigReq, res, err := pipeApi.GetRepositoryPipelineConfig(c.AuthContext, workspace, repoSlug)
-	if err := handleClientError(res, err); err != nil && res.StatusCode != http.StatusNotFound {
+	if err := handleClientError(res, err); err != nil && (res == nil || res.StatusCode != http.StatusNotFound) {
 		return diag.FromErr(err)
 	}
 
@@ -555,8 +567,50 @@ func repositoryId(id string) (string, string, error) {
 	parts := strings.Split(id, "/")
 
 	if len(parts) != 2 {
-		return "", "", fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE:REPO-SLUG", id)
+		return "", "", fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG", id)
 	}
 
 	return parts[0], parts[1], nil
+}
+
+func denyOwnerChange(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	if d.Id() != "" && d.HasChange("owner") {
+		o, n := d.GetChange("owner")
+		return fmt.Errorf("changing owner from %q to %q is not supported; transfer it in Bitbucket and re-import, or replace it explicitly", o, n)
+	}
+	return nil
+}
+
+func setRepositoryWebsite(client Client, workspace, repoSlug, website string) error {
+	payload, err := json.Marshal(map[string]string{"website": website})
+	if err != nil {
+		return err
+	}
+	_, err = client.Put(fmt.Sprintf("2.0/repositories/%s/%s", workspace, repoSlug), bytes.NewBuffer(payload))
+	return err
+}
+
+func readRepositoryWebsite(d *schema.ResourceData, client Client, workspace, repoSlug string) diag.Diagnostics {
+	if d.Get("website").(string) == "" {
+		return nil
+	}
+
+	res, err := client.Get(fmt.Sprintf("2.0/repositories/%s/%s?fields=website", workspace, repoSlug))
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	defer res.Body.Close()
+
+	var repo struct {
+		Website *string `json:"website"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&repo); err != nil {
+		return diag.FromErr(err)
+	}
+	if repo.Website == nil {
+		d.Set("website", "")
+	} else {
+		d.Set("website", *repo.Website)
+	}
+	return nil
 }

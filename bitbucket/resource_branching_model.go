@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
@@ -20,7 +21,26 @@ type BranchingModel struct {
 	Development           *BranchModel  `json:"development,omitempty"`
 	Production            *BranchModel  `json:"production,omitempty"`
 	BranchTypes           []*BranchType `json:"branch_types"`
-	DefaultBranchDeletion *bool         `json:"default_branch_deletion,omitempty"`
+	DefaultBranchDeletion *flexBool     `json:"default_branch_deletion,omitempty"`
+}
+
+type flexBool bool
+
+func (b *flexBool) UnmarshalJSON(data []byte) error {
+	s := strings.Trim(string(data), `"`)
+	if s == "" {
+		return nil
+	}
+	v, err := strconv.ParseBool(s)
+	if err != nil {
+		return err
+	}
+	*b = flexBool(v)
+	return nil
+}
+
+func (b flexBool) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatBool(bool(b)))
 }
 
 type BranchModel struct {
@@ -189,12 +209,16 @@ func resourceBranchingModelsRead(ctx context.Context, d *schema.ResourceData, m 
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	branchingModelsReq, _ := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/branching-model/settings", owner, repo))
+	branchingModelsReq, err := client.Get(fmt.Sprintf("2.0/repositories/%s/%s/branching-model/settings", owner, repo))
 
-	if branchingModelsReq.StatusCode == http.StatusNotFound {
+	if branchingModelsReq != nil && branchingModelsReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Branching Model (%s) not found, removing from state", d.Id())
 		d.SetId("")
 		return nil
+	}
+
+	if err != nil {
+		return diag.FromErr(err)
 	}
 
 	if branchingModelsReq.Body == nil {
@@ -226,10 +250,14 @@ func resourceBranchingModelsRead(ctx context.Context, d *schema.ResourceData, m 
 
 	d.Set("owner", owner)
 	d.Set("repository", repo)
-	d.Set("default_branch_deletion", branchingModel.DefaultBranchDeletion)
+	if v := branchingModel.DefaultBranchDeletion; v != nil {
+		d.Set("default_branch_deletion", bool(*v))
+	} else {
+		d.Set("default_branch_deletion", nil)
+	}
 	d.Set("development", flattenBranchModel(branchingModel.Development, "development"))
 	d.Set("branch_type", flattenBranchTypes(branchingModel.BranchTypes))
-	d.Set("production", flattenBranchModel(branchingModel.Production, "production"))
+	d.Set("production", flattenProductionBranchModel(d, branchingModel.Production))
 
 	return nil
 }
@@ -270,7 +298,7 @@ func expandBranchingModel(d *schema.ResourceData) *BranchingModel {
 
 	//nolint:staticcheck
 	if v, ok := d.GetOkExists("default_branch_deletion"); ok {
-		model.DefaultBranchDeletion = v.(*bool)
+		model.DefaultBranchDeletion = new(flexBool(v.(bool)))
 	}
 
 	return model
@@ -398,4 +426,11 @@ func branchingModelId(id string) (string, string, error) {
 	}
 
 	return parts[0], parts[1], nil
+}
+
+func flattenProductionBranchModel(d *schema.ResourceData, rp *BranchModel) []interface{} {
+	if rp != nil && !rp.Enabled && len(d.Get("production").([]interface{})) == 0 {
+		return []interface{}{}
+	}
+	return flattenBranchModel(rp, "production")
 }

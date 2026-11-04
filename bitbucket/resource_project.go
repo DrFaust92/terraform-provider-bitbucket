@@ -1,10 +1,14 @@
 package bitbucket
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
@@ -13,11 +17,14 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
+var projectAvatarURL = regexp.MustCompile(`^https://bitbucket\.org/[^/]+/workspace/projects/[^/]+/avatar/`)
+
 func resourceProject() *schema.Resource {
 	return &schema.Resource{
 		CreateWithoutTimeout: resourceProjectCreate,
 		UpdateWithoutTimeout: resourceProjectUpdate,
 		ReadWithoutTimeout:   resourceProjectRead,
+		CustomizeDiff:        denyOwnerChange,
 		DeleteWithoutTimeout: resourceProjectDelete,
 		Importer: &schema.ResourceImporter{
 			StateContext: schema.ImportStatePassthroughContext,
@@ -73,7 +80,7 @@ func resourceProject() *schema.Resource {
 										Type:     schema.TypeString,
 										Optional: true,
 										DiffSuppressFunc: func(k, old, new string, d *schema.ResourceData) bool {
-											return strings.HasPrefix(old, "https://bitbucket.org/account/user")
+											return strings.HasPrefix(old, "https://bitbucket.org/account/user") || projectAvatarURL.MatchString(old)
 										},
 									},
 								},
@@ -90,8 +97,16 @@ func resourceProject() *schema.Resource {
 // 	Links *bitbucket.ProjectLinks `json:"links,omitempty"`
 // }
 
-func newProjectFromResource(d *schema.ResourceData) *bitbucket.Project {
-	project := &bitbucket.Project{
+type projectRequest struct {
+	Name        string                  `json:"name"`
+	Key         string                  `json:"key"`
+	Description string                  `json:"description"`
+	IsPrivate   bool                    `json:"is_private"`
+	Links       *bitbucket.ProjectLinks `json:"links,omitempty"`
+}
+
+func newProjectFromResource(d *schema.ResourceData) *projectRequest {
+	project := &projectRequest{
 		Name:        d.Get("name").(string),
 		IsPrivate:   d.Get("is_private").(bool),
 		Description: d.Get("description").(string),
@@ -106,27 +121,23 @@ func newProjectFromResource(d *schema.ResourceData) *bitbucket.Project {
 }
 
 func resourceProjectUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	c := m.(Clients).genClient
-	// client := m.(Clients).httpClient
-	projectApi := c.ApiClient.ProjectsApi
+	client := m.(Clients).httpClient
 	project := newProjectFromResource(d)
 
-	var projectKey string
-	projectKey = d.Get("key").(string)
-	if projectKey == "" {
-		//nolint:staticcheck
-		projectKey = d.Get("key").(string)
-	}
+	oldKey, _ := d.GetChange("key")
+	projectKey := oldKey.(string)
 
 	log.Printf("[DEBUG] Project Update Body: %#v", project)
 	project.Links = nil
 
-	prj, res, err := projectApi.WorkspacesWorkspaceProjectsProjectKeyPut(c.AuthContext, *project, projectKey, d.Get("owner").(string))
-	if err := handleClientError(res, err); err != nil {
+	var prj bitbucket.Project
+	if err := sendProject(client, http.MethodPut, fmt.Sprintf("2.0/workspaces/%s/projects/%s", d.Get("owner").(string), url.PathEscape(projectKey)), project, &prj); err != nil {
 		return diag.FromErr(err)
 	}
 
 	log.Printf("[DEBUG] Project Update Res: %#v", prj)
+
+	d.SetId(fmt.Sprintf("%s/%s", d.Get("owner").(string), prj.Key))
 
 	// if d.HasChange("link") {
 	// 	if v, ok := d.GetOk("link"); ok && len(v.([]interface{})) > 0 && v.([]interface{}) != nil {
@@ -157,16 +168,15 @@ func resourceProjectUpdate(ctx context.Context, d *schema.ResourceData, m interf
 }
 
 func resourceProjectCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	c := m.(Clients).genClient
-	projectApi := c.ApiClient.ProjectsApi
+	client := m.(Clients).httpClient
 	project := newProjectFromResource(d)
 
 	owner := d.Get("owner").(string)
 
 	log.Printf("[DEBUG] Project Create Body: %#v", project)
 
-	projRes, res, err := projectApi.WorkspacesWorkspaceProjectsPost(c.AuthContext, *project, owner)
-	if err := handleClientError(res, err); err != nil {
+	var projRes bitbucket.Project
+	if err := sendProject(client, http.MethodPost, fmt.Sprintf("2.0/workspaces/%s/projects", owner), project, &projRes); err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -268,4 +278,19 @@ func flattenProjectLinks(rp *bitbucket.ProjectLinks) []interface{} {
 	}
 
 	return []interface{}{m}
+}
+
+func sendProject(client Client, method, endpoint string, body *projectRequest, out *bitbucket.Project) error {
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	res, err := client.Do(method, endpoint, bytes.NewBuffer(payload), "application/json")
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	return json.NewDecoder(res.Body).Decode(out)
 }

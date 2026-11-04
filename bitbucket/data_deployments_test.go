@@ -22,6 +22,9 @@ func TestAccDataSourceDeployments_basic(t *testing.T) {
 		Steps: []resource.TestStep{
 			{
 				Config: testAccBitbucketDeploymentsConfig(workspace, rName, rName),
+			},
+			{
+				Config: testAccBitbucketDeploymentsConfig(workspace, rName, rName),
 				Check: resource.ComposeTestCheckFunc(
 					resource.TestCheckResourceAttr(dataSourceName, "workspace", workspace),
 					resource.TestCheckResourceAttr(dataSourceName, "uuids.#", "1"),

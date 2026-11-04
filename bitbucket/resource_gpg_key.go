@@ -2,12 +2,14 @@ package bitbucket
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -29,9 +31,10 @@ func resourceGpgKey() *schema.Resource {
 				ForceNew: true,
 			},
 			"key": {
-				Type:     schema.TypeString,
-				Required: true,
-				ForceNew: true,
+				Type:             schema.TypeString,
+				Required:         true,
+				ForceNew:         true,
+				DiffSuppressFunc: suppressSameGPGKey,
 			},
 			"name": {
 				Type:     schema.TypeString,
@@ -98,9 +101,9 @@ func resourceGpgKeysRead(ctx context.Context, d *schema.ResourceData, m interfac
 	}
 
 	d.Set("user", user)
-	// The API returns the normalized (armored) key, which differs from the
-	// submitted value; preserve the configured key to avoid a perpetual diff.
-	d.Set("key", d.Get("key").(string))
+	if d.Get("key").(string) == "" && gpgKeyReq.Key != "" {
+		d.Set("key", gpgKeyReq.Key)
+	}
 	d.Set("name", gpgKeyReq.Name)
 	d.Set("fingerprint", gpgKeyReq.Fingerprint)
 	d.Set("key_id", gpgKeyReq.KeyId)
@@ -142,4 +145,20 @@ func gpgKeyId(id string) (string, string, error) {
 	}
 
 	return parts[0], parts[1], nil
+}
+
+func suppressSameGPGKey(_, old, new string, d *schema.ResourceData) bool {
+	fingerprint := d.Get("fingerprint").(string)
+	if old == "" || new == "" || fingerprint == "" {
+		return false
+	}
+	return strings.EqualFold(gpgKeyFingerprint(new), fingerprint)
+}
+
+func gpgKeyFingerprint(armored string) string {
+	keys, err := openpgp.ReadArmoredKeyRing(strings.NewReader(armored))
+	if err != nil || len(keys) == 0 || keys[0].PrimaryKey == nil {
+		return ""
+	}
+	return hex.EncodeToString(keys[0].PrimaryKey.Fingerprint)
 }

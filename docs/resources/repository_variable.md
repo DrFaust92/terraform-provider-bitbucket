@@ -34,7 +34,9 @@ resource "bitbucket_repository_variable" "debug" {
 ## Argument Reference
 
 * `key` - (Required) The key of the key value pair
-* `value` - (Required) The value of the key. This will not be returned if `secured` is set to true from API and wont be drift detected by provider.
+* `value` - (Optional) Exactly one of `value` or `value_wo` must be set. The value of the key. This will not be returned if `secured` is set to true from API and wont be drift detected by provider.
+* `value_wo` - (Optional) Write-only alternative to `value`, never stored in Terraform state or plan output. Requires Terraform 1.11 or later. Conflicts with `value`. See [write-only arguments](https://developer.hashicorp.com/terraform/language/manage-sensitive-data/write-only).
+* `value_wo_version` - (Optional) Required with `value_wo`. Terraform cannot detect changes to write-only values, change this value (e.g. `"2"`) to send an updated `value_wo`.
 * `repository` - (Required) The repository ID you want to put this variable onto. (of form workspace-id/repository-id)
 * `secured` - (Optional) If you want to make this viewable in the UI.
 

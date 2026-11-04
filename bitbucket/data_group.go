@@ -50,7 +50,11 @@ func dataReadGroup(ctx context.Context, d *schema.ResourceData, m interface{}) d
 	workspace := d.Get("workspace").(string)
 	slug := d.Get("slug").(string)
 
-	groupsReq, _ := client.Get(fmt.Sprintf("1.0/groups/%s/%s", workspace, slug))
+	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s", workspace, slug))
+
+	if err != nil {
+		return diag.FromErr(err)
+	}
 
 	if groupsReq.Body == nil {
 		return diag.Errorf("error reading Group (%s): empty response", d.Id())
