@@ -243,51 +243,29 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 
 	var diags diag.Diagnostics
 
-	// Warn when prevState contains legacy username-format users but the API
-	// now returns only UUIDs (Bitbucket deprecated and removed username from
-	// account responses as part of its GDPR changes). Keeping a username in
-	// config produces a perpetual diff on every plan/apply because the API
-	// accepts usernames on write but never echoes them back on read.
-	// The warning lists each affected user's UUID and display name so the
-	// operator can update their config.  The diff disappears permanently once
-	// config is updated to use UUIDs. See: github.com/DrFaust92/terraform-provider-bitbucket/issues/173
-	prevUsers := d.Get("users").(*schema.Set)
-	if prevUsers.Len() > 0 && len(brRes.Users) > 0 {
-		var staleUsernames []string
-		for _, raw := range prevUsers.List() {
-			if s := raw.(string); !bitbucketUUIDPattern.MatchString(s) {
-				staleUsernames = append(staleUsernames, s)
+	// Warn when an existing resource (not a brand-new Create) still has a
+	// legacy username-format user in state. Bitbucket's GDPR changes removed
+	// usernames from account responses, so the API accepts them on write but
+	// never echoes them back on read — this resource will keep diffing until
+	// the config is updated to use the UUIDs now in state.
+	// See: github.com/DrFaust92/terraform-provider-bitbucket/issues/173
+	if !d.IsNewResource() && len(brRes.Users) > 0 {
+		hasLegacyUsername := false
+		for _, raw := range d.Get("users").(*schema.Set).List() {
+			if !bitbucketUUIDPattern.MatchString(raw.(string)) {
+				hasLegacyUsername = true
+				break
 			}
 		}
-		if len(staleUsernames) > 0 {
-			var lines []string
-			for _, u := range brRes.Users {
-				if u.Uuid != "" {
-					name := u.DisplayName
-					if name == "" {
-						name = u.Uuid
-					}
-					lines = append(lines, fmt.Sprintf("  • %s (%s)", u.Uuid, name))
-				}
-			}
-			if len(lines) > 0 {
-				diags = append(diags, diag.Diagnostic{
-					Severity: diag.Warning,
-					Summary:  "branch_restriction: users migrating from legacy username to UUID",
-					Detail: fmt.Sprintf(
-						"This resource has legacy username(s) in state (%s), but the "+
-							"Bitbucket API no longer returns usernames (deprecated as part of "+
-							"Bitbucket's GDPR changes). Terraform will update state to use UUIDs, "+
-							"producing a perpetual diff on every plan/apply until the config is "+
-							"updated to use UUIDs.\n\nUsers currently on this restriction:\n%s\n\n"+
-							"Update your config to use the UUIDs above. As a temporary escape "+
-							"hatch, add `lifecycle { ignore_changes = [users] }` to suppress the "+
-							"diff without migrating.",
-						strings.Join(staleUsernames, ", "),
-						strings.Join(lines, "\n"),
-					),
-				})
-			}
+		if hasLegacyUsername {
+			diags = append(diags, diag.Diagnostic{
+				Severity: diag.Warning,
+				Summary:  "branch_restriction: legacy username(s) in users will keep diffing",
+				Detail: "The Bitbucket API no longer returns usernames, so this resource's " +
+					"users will show a diff on every plan/apply until the config is updated " +
+					"to use the UUIDs now in state. Add `lifecycle { ignore_changes = [users] }` " +
+					"to suppress it if you can't migrate right away.",
+			})
 		}
 	}
 
@@ -380,24 +358,10 @@ func flattenBranchRestrictionUsers(users []bitbucket.Account) []string {
 	return flattened
 }
 
-// groupOwnerIdentifier resolves the workspace identifier for a group returned
-// by the Bitbucket branch-restrictions API.
-//
-// The API currently returns the workspace slug in group.Owner.Username with
-// group.Owner.Uuid empty. However, the response may also include a
-// group.Workspace object that carries the workspace UUID — checked first so
-// users who configure groups.owner with a UUID see a stable round-trip if the
-// API provides it.
-//
-// Priority: group.Workspace.Uuid → group.Owner.Uuid → group.Workspace.Slug → group.Owner.Username
-// Returns "" if no identifier can be resolved (caller must drop the group).
-func groupOwnerIdentifier(group bitbucket.Group) string {
-	if group.Workspace != nil && group.Workspace.Uuid != "" {
-		return group.Workspace.Uuid
-	}
-	if group.Owner != nil && group.Owner.Uuid != "" {
-		return group.Owner.Uuid
-	}
+// groupSlugIdentifier returns the workspace slug for a group, if the API
+// provided one — either on the group.Workspace object, or (observed on some
+// API responses) as group.Owner.Username.
+func groupSlugIdentifier(group bitbucket.Group) string {
 	if group.Workspace != nil && group.Workspace.Slug != "" {
 		return group.Workspace.Slug
 	}
@@ -407,23 +371,53 @@ func groupOwnerIdentifier(group bitbucket.Group) string {
 	return ""
 }
 
+// groupUUIDIdentifier returns the workspace UUID for a group, if the API
+// provided one.
+func groupUUIDIdentifier(group bitbucket.Group) string {
+	if group.Workspace != nil && group.Workspace.Uuid != "" {
+		return group.Workspace.Uuid
+	}
+	if group.Owner != nil && group.Owner.Uuid != "" {
+		return group.Owner.Uuid
+	}
+	return ""
+}
+
+// groupOwnerIdentifier resolves the default identifier to report for a
+// group's owner when there's no matching prior state to preserve (see
+// flattenBranchRestrictionGroups): the workspace slug, since that's the form
+// the docs call preferred and what most existing configs use. Falls back to
+// the UUID if the API didn't return a slug. Returns "" if neither is
+// available (caller must drop the group).
+func groupOwnerIdentifier(group bitbucket.Group) string {
+	if slug := groupSlugIdentifier(group); slug != "" {
+		return slug
+	}
+	return groupUUIDIdentifier(group)
+}
+
 // flattenBranchRestrictionGroups reports the owner/slug pairs the API returns
 // for groups, since brRes.Groups is a slice of structs that doesn't match the
 // groups TypeSet's Resource{owner, slug} shape.
 //
 // prevState is the groups TypeSet from state before this Read call (i.e.
 // d.Get("groups").(*schema.Set) read before d.Set("groups", ...) overwrites it).
-// When the API returns a slug owner and prevState has a UUID owner for the same
-// group slug, the UUID is preserved — preventing a perpetual diff for users who
-// configure groups.owner as a UUID while the API returns the workspace slug.
+//
+// The API returns both a workspace slug and a workspace UUID for the group
+// owner. Either form is valid in config, but whichever form is already in
+// state must round-trip stably — reporting the other (if equivalent) form
+// produces a perpetual TypeSet hash mismatch even though both refer to the
+// same workspace. So: if the previous owner matches either the slug or the
+// UUID the API returned for this group (case-insensitive), it is kept as-is;
+// otherwise the slug is used, since that's the default/preferred form (see
+// groupOwnerIdentifier).
 //
 // Groups whose owner cannot be resolved are silently dropped — writing owner:""
 // would guarantee a persistent diff because owner is Required in the schema and
 // no real HCL config can supply an empty string there.
-// See groupOwnerIdentifier for the resolution priority.
 func flattenBranchRestrictionGroups(groups []bitbucket.Group, prevState *schema.Set) []interface{} {
-	// Build a slug→owner lookup from the previous state so we can preserve
-	// UUID owners that the API no longer returns.
+	// Build a group slug → owner lookup from the previous state so we can
+	// preserve whichever identifier form (UUID or slug) is already there.
 	prevOwnerBySlug := make(map[string]string)
 	if prevState != nil {
 		for _, raw := range prevState.List() {
@@ -444,11 +438,10 @@ func flattenBranchRestrictionGroups(groups []bitbucket.Group, prevState *schema.
 			continue
 		}
 
-		// If the API returned a non-UUID owner (i.e. workspace slug) but the
-		// prior state had a UUID for the same group slug, keep the UUID.
-		// This prevents a perpetual diff when the user's config uses a UUID.
-		if !bitbucketUUIDPattern.MatchString(owner) {
-			if prev, ok := prevOwnerBySlug[group.Slug]; ok && bitbucketUUIDPattern.MatchString(prev) {
+		if prev, ok := prevOwnerBySlug[group.Slug]; ok {
+			slug := groupSlugIdentifier(group)
+			uuid := groupUUIDIdentifier(group)
+			if strings.EqualFold(prev, slug) || strings.EqualFold(prev, uuid) {
 				owner = prev
 			}
 		}

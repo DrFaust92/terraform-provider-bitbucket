@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/DrFaust92/bitbucket-go-client"
@@ -136,9 +137,9 @@ func TestAccBitbucketBranchRestriction_groups(t *testing.T) {
 					testAccCheckBitbucketBranchRestrictionExists(resourceName),
 					resource.TestCheckResourceAttr(resourceName, "groups.#", "1"),
 					resource.TestCheckTypeSetElemAttrPair(resourceName, "groups.*.slug", "bitbucket_group.test", "slug"),
-					// Confirmed: the 2.0 API returns owner.uuid and workspace.uuid in the
-					// group object on both personal (davidlukac07) and org (sycle-corp)
-					// workspaces. groups.owner round-trips as the workspace UUID.
+					// The 2.0 API returns both owner.uuid and workspace.uuid in the group
+					// object; groups.owner round-trips as the workspace UUID here since
+					// that's the form this config uses.
 					resource.TestCheckTypeSetElemAttrPair(resourceName, "groups.*.owner", "data.bitbucket_workspace.test", "id"),
 				),
 			},
@@ -165,11 +166,10 @@ func TestAccBitbucketBranchRestriction_groups(t *testing.T) {
 // It uses a pre-existing workspace group identified by BITBUCKET_EXISTING_GROUP_SLUG
 // and grants it write access to the test repo before adding it to a branch
 // restriction. It then verifies that:
-//   - groups.owner in state matches the workspace UUID (not the slug)
-//   - a plan immediately after apply is empty (no perpetual diff)
+//   - groups.owner in state matches the workspace UUID when configured as a UUID
+//   - groups.owner in state matches the workspace slug when configured as a slug
+//   - a plan immediately after each apply is empty (no perpetual diff)
 //   - ImportStateVerify passes
-//
-// For davidlukac07 use: BITBUCKET_EXISTING_GROUP_SLUG=da52073d-f30b-49e1-907a-be56bb5c0f5b
 func TestAccBitbucketBranchRestriction_groupsExisting(t *testing.T) {
 	groupSlug := os.Getenv("BITBUCKET_EXISTING_GROUP_SLUG")
 	if groupSlug == "" {
@@ -186,27 +186,49 @@ func TestAccBitbucketBranchRestriction_groupsExisting(t *testing.T) {
 		CheckDestroy: testAccCheckBitbucketBranchRestrictionDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccBitbucketBranchRestrictionGroupsExistingConfig(testUser, rName, groupSlug),
+				// Apply with the slug owner form first — this is also the
+				// default flattenBranchRestrictionGroups falls back to when
+				// there's no prior state to preserve (e.g. on import, below),
+				// so this ordering keeps the import step's comparison baseline
+				// consistent with that default.
+				Config: testAccBitbucketBranchRestrictionGroupsExistingSlugOwnerConfig(testUser, rName, groupSlug),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckBitbucketBranchRestrictionExists(resourceName),
 					resource.TestCheckResourceAttr(resourceName, "groups.#", "1"),
 					resource.TestCheckResourceAttr(resourceName, "groups.0.slug", groupSlug),
-					// The 2.0 API returns owner.uuid for the group owner.
-					// groupOwnerIdentifier picks Workspace.Uuid (or Owner.Uuid) so
-					// state should contain the workspace UUID, not the slug.
-					resource.TestCheckTypeSetElemAttrPair(resourceName, "groups.*.owner", "data.bitbucket_workspace.test", "id"),
+					resource.TestCheckTypeSetElemAttrPair(resourceName, "groups.*.owner", "data.bitbucket_workspace.test", "slug"),
 				),
 			},
 			{
-				// UUID round-trip: plan immediately after apply must be empty.
-				Config:   testAccBitbucketBranchRestrictionGroupsExistingConfig(testUser, rName, groupSlug),
+				// Slug round-trip: a plan immediately after apply must be empty.
+				Config:   testAccBitbucketBranchRestrictionGroupsExistingSlugOwnerConfig(testUser, rName, groupSlug),
 				PlanOnly: true,
 			},
 			{
+				// Import has no prior state at all to preserve a configured form
+				// from, so it reads back groupOwnerIdentifier's bare default (the
+				// slug) — which is why this step runs right after a slug-owner
+				// apply above, rather than after a UUID-owner one.
 				ResourceName:      resourceName,
 				ImportState:       true,
 				ImportStateIdFunc: testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName),
 				ImportStateVerify: true,
+			},
+			{
+				// Switch the config to use the workspace UUID instead of the
+				// slug. This is a real config change, so a one-time diff to
+				// converge on the UUID is expected and fine.
+				Config: testAccBitbucketBranchRestrictionGroupsExistingConfig(testUser, rName, groupSlug),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchRestrictionExists(resourceName),
+					resource.TestCheckTypeSetElemAttrPair(resourceName, "groups.*.owner", "data.bitbucket_workspace.test", "id"),
+				),
+			},
+			{
+				// UUID round-trip: once in state, the UUID form must not flip
+				// back to the slug on a subsequent Read.
+				Config:   testAccBitbucketBranchRestrictionGroupsExistingConfig(testUser, rName, groupSlug),
+				PlanOnly: true,
 			},
 		},
 	})
@@ -515,13 +537,27 @@ func TestFlattenBranchRestrictionGroups(t *testing.T) {
 			[]interface{}{},
 		},
 		{
-			// The API may return group.Workspace with a UUID — preferred above all
-			// other identifiers so users who configure owner as UUID see a stable
-			// round-trip when this field is populated.
-			"workspace uuid preferred over owner uuid",
+			// New group (not in prevState): the API returns both a slug and a
+			// UUID, and the slug is used since it's the default/preferred form.
+			"new group with both forms defaults to slug",
 			[]bitbucket.Group{
 				{
 					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "ws-slug"},
+					Owner:     &bitbucket.Account{Uuid: ownerUUID},
+					Slug:      "my-group",
+				},
+			},
+			nil,
+			[]interface{}{
+				map[string]interface{}{"owner": "ws-slug", "slug": "my-group"},
+			},
+		},
+		{
+			// New group with no slug available at all: falls back to the UUID.
+			"new group with uuid only falls back to uuid",
+			[]bitbucket.Group{
+				{
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID},
 					Owner:     &bitbucket.Account{Uuid: ownerUUID},
 					Slug:      "my-group",
 				},
@@ -532,102 +568,79 @@ func TestFlattenBranchRestrictionGroups(t *testing.T) {
 			},
 		},
 		{
-			// Regression: Bitbucket API returns group.Owner.Username = workspace slug,
-			// group.Owner.Uuid = "", group.Workspace = nil (API omits Workspace field).
-			// If prevState had a UUID owner for the same slug, preserve it.
-			"prevState uuid preserved when API returns slug (regression)",
-			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "administrators"},
-			},
-			makeGroupsSet([]map[string]interface{}{
-				{"owner": "{c73001e4-85bf-4fa1-a18e-f02a5fc392c4}", "slug": "administrators"},
-			}),
-			[]interface{}{
-				map[string]interface{}{"owner": "{c73001e4-85bf-4fa1-a18e-f02a5fc392c4}", "slug": "administrators"},
-			},
-		},
-		{
-			// Multiple groups: UUID owners in prevState are all preserved.
-			"prevState uuid preserved for multiple groups",
-			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "admins"},
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "developers"},
-			},
-			makeGroupsSet([]map[string]interface{}{
-				{"owner": wsUUID, "slug": "admins"},
-				{"owner": wsUUID, "slug": "developers"},
-			}),
-			[]interface{}{
-				map[string]interface{}{"owner": wsUUID, "slug": "admins"},
-				map[string]interface{}{"owner": wsUUID, "slug": "developers"},
-			},
-		},
-		{
-			// If prevState has a slug owner and API returns slug, slug is used.
-			// No UUID in prevState → no substitution.
-			"slug in prevState stays slug",
-			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "my-group"},
-			},
-			makeGroupsSet([]map[string]interface{}{
-				{"owner": "sycle-corp", "slug": "my-group"},
-			}),
-			[]interface{}{
-				map[string]interface{}{"owner": "sycle-corp", "slug": "my-group"},
-			},
-		},
-		{
-			// New group (not in prevState): slug is used as-is.
-			"new group not in prevState uses api value",
-			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "new-group"},
-			},
-			makeGroupsSet([]map[string]interface{}{
-				{"owner": wsUUID, "slug": "other-group"},
-			}),
-			[]interface{}{
-				map[string]interface{}{"owner": "sycle-corp", "slug": "new-group"},
-			},
-		},
-		{
-			// When workspace UUID is absent, fall back to owner UUID.
-			"owner uuid used when workspace uuid empty",
+			// KEY REGRESSION CASE: prevState has the slug, and the API returns
+			// both a UUID and the same slug for the group owner. The slug must
+			// be preserved — not flipped to the UUID — since the slug is what
+			// the user's config and state already use.
+			"prevState slug preserved when API also returns a uuid",
 			[]bitbucket.Group{
 				{
-					Workspace: &bitbucket.Workspace{Slug: "ws-slug"},
-					Owner:     &bitbucket.Account{Uuid: ownerUUID},
-					Slug:      "my-group",
+					Owner:     &bitbucket.Account{Uuid: wsUUID, Username: "myteam"},
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "myteam"},
+					Slug:      "administrators",
 				},
 			},
-			nil,
+			makeGroupsSet([]map[string]interface{}{
+				{"owner": "myteam", "slug": "administrators"},
+			}),
 			[]interface{}{
-				map[string]interface{}{"owner": ownerUUID, "slug": "my-group"},
+				map[string]interface{}{"owner": "myteam", "slug": "administrators"},
 			},
 		},
 		{
-			// When both UUIDs are absent and no prevState, prefer workspace slug.
-			"workspace slug preferred over owner username (no prevState)",
+			// Opposite direction: prevState has the UUID (e.g. from before this
+			// fix, or a UUID-based config), API returns both forms — the UUID
+			// must be preserved, not flipped to the slug.
+			"prevState uuid preserved when API also returns a slug",
 			[]bitbucket.Group{
 				{
-					Workspace: &bitbucket.Workspace{Slug: "ws-slug"},
-					Owner:     &bitbucket.Account{Username: "owner-username"},
-					Slug:      "my-group",
+					Owner:     &bitbucket.Account{Uuid: wsUUID, Username: "myteam"},
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "myteam"},
+					Slug:      "administrators",
 				},
 			},
-			nil,
+			makeGroupsSet([]map[string]interface{}{
+				{"owner": wsUUID, "slug": "administrators"},
+			}),
 			[]interface{}{
-				map[string]interface{}{"owner": "ws-slug", "slug": "my-group"},
+				map[string]interface{}{"owner": wsUUID, "slug": "administrators"},
 			},
 		},
 		{
-			// Last-resort fallback: no workspace, owner has only username.
-			"owner username fallback when workspace nil",
+			// prevState owner matches neither the slug nor the UUID the API
+			// returned for this group slug (e.g. stale/unrelated value) — falls
+			// back to the default (slug) rather than keeping a mismatched value.
+			"prevState owner matching neither form falls back to slug default",
 			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "legacy-owner"}, Slug: "my-group"},
+				{
+					Owner:     &bitbucket.Account{Uuid: wsUUID, Username: "myteam"},
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "myteam"},
+					Slug:      "administrators",
+				},
 			},
-			nil,
+			makeGroupsSet([]map[string]interface{}{
+				{"owner": "some-other-value", "slug": "administrators"},
+			}),
 			[]interface{}{
-				map[string]interface{}{"owner": "legacy-owner", "slug": "my-group"},
+				map[string]interface{}{"owner": "myteam", "slug": "administrators"},
+			},
+		},
+		{
+			// Case-insensitive match: prevState's exact casing is preserved
+			// even though it differs from the API's canonical lowercase UUID.
+			"prevState uuid casing preserved on case-insensitive match",
+			[]bitbucket.Group{
+				{
+					Owner:     &bitbucket.Account{Uuid: wsUUID, Username: "myteam"},
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "myteam"},
+					Slug:      "administrators",
+				},
+			},
+			makeGroupsSet([]map[string]interface{}{
+				{"owner": strings.ToUpper(wsUUID), "slug": "administrators"},
+			}),
+			[]interface{}{
+				map[string]interface{}{"owner": strings.ToUpper(wsUUID), "slug": "administrators"},
 			},
 		},
 		{
@@ -652,10 +665,15 @@ func TestFlattenBranchRestrictionGroups(t *testing.T) {
 		},
 		{
 			// CLAUDE.md requires flatten-helper tests to cover a mix of valid
-			// (UUID) and legacy-format (username) values in the same collection.
-			"mix: prevState UUID preserved + new slug group",
+			// (preserved-from-state) and legacy-format (no prevState, username
+			// only) values in the same collection.
+			"mix: prevState match preserved + brand new username-only group",
 			[]bitbucket.Group{
-				{Owner: &bitbucket.Account{Username: "sycle-corp"}, Slug: "uuid-group"},
+				{
+					Owner:     &bitbucket.Account{Uuid: wsUUID, Username: "myteam"},
+					Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "myteam"},
+					Slug:      "uuid-group",
+				},
 				{Owner: &bitbucket.Account{Username: "legacy-owner"}, Slug: "legacy-group"},
 			},
 			makeGroupsSet([]map[string]interface{}{
@@ -709,45 +727,37 @@ func TestGroupOwnerIdentifier(t *testing.T) {
 		want  string
 	}{
 		{
-			"workspace uuid preferred",
+			// The API returns both forms for every group; the slug is the
+			// default even when a UUID is also present, since that's the
+			// form the docs call preferred and most existing configs use.
+			"workspace slug preferred even when uuids are also present",
 			bitbucket.Group{
 				Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "ws-slug"},
 				Owner:     &bitbucket.Account{Uuid: ownerUUID, Username: "owner-slug"},
 			},
-			wsUUID,
-		},
-		{
-			// Regression: API returns Owner.Username = workspace slug, Owner.Uuid = "".
-			// If group.Workspace.Uuid is present it must win.
-			"workspace uuid beats owner username (regression)",
-			bitbucket.Group{
-				Workspace: &bitbucket.Workspace{Uuid: wsUUID, Slug: "sycle-corp"},
-				Owner:     &bitbucket.Account{Username: "sycle-corp"},
-			},
-			wsUUID,
-		},
-		{
-			"owner uuid when workspace uuid absent",
-			bitbucket.Group{
-				Workspace: &bitbucket.Workspace{Slug: "ws-slug"},
-				Owner:     &bitbucket.Account{Uuid: ownerUUID},
-			},
-			ownerUUID,
-		},
-		{
-			"workspace slug when both uuids absent",
-			bitbucket.Group{
-				Workspace: &bitbucket.Workspace{Slug: "ws-slug"},
-				Owner:     &bitbucket.Account{Username: "owner-username"},
-			},
 			"ws-slug",
 		},
 		{
-			"owner username last resort",
+			"owner username used as slug when workspace is nil",
 			bitbucket.Group{
-				Owner: &bitbucket.Account{Username: "legacy-owner"},
+				Owner: &bitbucket.Account{Uuid: ownerUUID, Username: "owner-slug"},
 			},
-			"legacy-owner",
+			"owner-slug",
+		},
+		{
+			"workspace uuid used when no slug is available",
+			bitbucket.Group{
+				Workspace: &bitbucket.Workspace{Uuid: wsUUID},
+				Owner:     &bitbucket.Account{Uuid: ownerUUID},
+			},
+			wsUUID,
+		},
+		{
+			"owner uuid used when workspace is absent entirely",
+			bitbucket.Group{
+				Owner: &bitbucket.Account{Uuid: ownerUUID},
+			},
+			ownerUUID,
 		},
 		{
 			"nil workspace and nil owner returns empty",
@@ -886,6 +896,44 @@ resource "bitbucket_branch_restriction" "test" {
 
   groups {
     owner = data.bitbucket_workspace.test.id
+    slug  = %[3]q
+  }
+
+  depends_on = [bitbucket_repository_group_permission.test]
+}
+`, testUser, rName, groupSlug)
+}
+
+// testAccBitbucketBranchRestrictionGroupsExistingSlugOwnerConfig is identical
+// to testAccBitbucketBranchRestrictionGroupsExistingConfig except groups.owner
+// uses the workspace slug (data.bitbucket_workspace.test.slug) instead of the
+// UUID, to verify the slug form round-trips stably too.
+func testAccBitbucketBranchRestrictionGroupsExistingSlugOwnerConfig(testUser, rName, groupSlug string) string {
+	return fmt.Sprintf(`
+data "bitbucket_workspace" "test" {
+  workspace = %[1]q
+}
+
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+
+resource "bitbucket_repository_group_permission" "test" {
+  workspace  = %[1]q
+  repo_slug  = bitbucket_repository.test.name
+  group_slug = %[3]q
+  permission = "write"
+}
+
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = "push"
+  pattern    = "master"
+
+  groups {
+    owner = data.bitbucket_workspace.test.slug
     slug  = %[3]q
   }
 
