@@ -4,5 +4,11 @@
     "config:recommended",
     "helpers:pinGitHubActionDigests"
   ],
-  "osvVulnerabilityAlerts": true
+  "osvVulnerabilityAlerts": true,
+  "postUpdateOptions": [
+    "gomodTidy"
+  ],
+  "vulnerabilityAlerts": {
+    "groupName": "security updates"
+  }
 }
