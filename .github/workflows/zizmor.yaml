@@ -1,0 +1,27 @@
+name: zizmor
+
+on:
+  pull_request:
+    paths:
+      - '.github/**'
+  push:
+    branches: [master]
+    paths:
+      - '.github/**'
+
+permissions:
+  contents: read
+
+jobs:
+  zizmor:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Audit workflows
+        uses: zizmorcore/zizmor-action@bd12b495c90993a4301c73398142281a61499af3 # v0.9.0
+        with:
+          advanced-security: false
+          version: 1.33.0
