@@ -1,27 +1,45 @@
-# This GitHub action can publish assets for release when a tag is created.
-# Currently its setup to run on any tag that matches the pattern "v*" (ie. v0.1.0).
+# Terraform Provider release workflow, based on
+# hashicorp/terraform-provider-scaffolding-framework.
 #
-# This uses an action (hashicorp/ghaction-import-gpg) that assumes you set your
-# private key in the `GPG_PRIVATE_KEY` secret and passphrase in the `PASSPHRASE`
-# secret. If you would rather own your own GPG handling, please fork this action
-# or use an alternative one for key handling.
-#
-# You will need to pass the `--batch` flag to `gpg` in your signing step
-# in `goreleaser` to indicate this is being used in a non-interactive mode.
-#
-name: release
+# Runs on tags matching "v*" (e.g. v1.0.0). Requires the GPG_PRIVATE_KEY and
+# PASSPHRASE secrets; GoReleaser signs the checksums file with that key.
+name: Release
+
 on:
   push:
     tags:
       - "v*"
+
 permissions:
   contents: write
+
 jobs:
-  terraform-provider-release:
-    name: "Terraform Provider Release"
-    uses: hashicorp/ghaction-terraform-provider-release/.github/workflows/community.yml@5f388ae147bcc1e1c34822571b2f2de40694c5d6 # v5.0.0
-    secrets:
-      gpg-private-key: "${{ secrets.GPG_PRIVATE_KEY }}"
-      gpg-private-key-passphrase: "${{ secrets.PASSPHRASE }}"
-    with:
-      setup-go-version-file: "go.mod"
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # GoReleaser needs the full history and tags.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: "go.mod"
+          # No cache restore in the release job.
+          cache: false
+
+      - name: Import GPG key
+        uses: crazy-max/ghaction-import-gpg@2dc316deee8e90f13e1a351ab510b4d5bc0c82cd # v7.0.0
+        id: import_gpg
+        with:
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.PASSPHRASE }}
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
