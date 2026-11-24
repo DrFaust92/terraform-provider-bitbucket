@@ -1,5 +1,9 @@
 ## Unreleased
 
+### Features
+
+* `bitbucket_branch_restriction`: accept `kind = "require_review_group_approvals_to_merge"`, and add the optional `pipelines_source_branches` argument. Create, read and update now call the branch-restrictions API directly, because the generated API client has no field for `pipelines_source_branches`.
+
 ### Bug fixes
 
 * `bitbucket_branch_restriction`: `users` and `groups` previously failed to populate in state at all, because the Bitbucket API's GDPR changes removed usernames from account responses while the provider still expected them. Now: `users` round-trips via UUID, and `groups.owner` round-trips via workspace slug or UUID (whichever form is already in your config/state). **Behavior change:** a config that lists a username in `users` previously showed no diff (because `Read` silently failed to populate state); it will now show a diff on every `plan`/`apply` until you switch that entry to the UUID shown in the new warning, or add `lifecycle { ignore_changes = [users] }`.

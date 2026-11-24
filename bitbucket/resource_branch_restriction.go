@@ -1,8 +1,11 @@
 package bitbucket
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 
 	"net/http"
@@ -29,6 +32,16 @@ type BranchRestriction struct {
 	Value           int     `json:"value,omitempty"`
 	Users           []User  `json:"users,omitempty"`
 	Groups          []Group `json:"groups,omitempty"`
+}
+
+// branchRestrictionBody is the wire format for the 2.0 branch-restrictions
+// endpoints. It embeds the generated client model (whose fields encoding/json
+// promotes to the top level) and adds the fields that model lacks.
+type branchRestrictionBody struct {
+	bitbucket.Branchrestriction
+	// PipelinesSourceBranches is a pointer so that nil omits the field while
+	// a pointer to an empty slice sends [] to clear it on update.
+	PipelinesSourceBranches *[]string `json:"pipelines_source_branches,omitempty"`
 }
 
 // User is just the user struct we want to use for BranchRestrictions
@@ -87,6 +100,7 @@ func resourceBranchRestriction() *schema.Resource {
 					"require_default_reviewer_approvals_to_merge",
 					"require_no_changes_requested",
 					"require_passing_builds_to_merge",
+					"require_review_group_approvals_to_merge",
 					"require_tasks_to_be_completed",
 					"reset_pullrequest_approvals_on_change",
 					"reset_pullrequest_changes_requested_on_change",
@@ -158,11 +172,16 @@ func resourceBranchRestriction() *schema.Resource {
 				Type:     schema.TypeInt,
 				Optional: true,
 			},
+			"pipelines_source_branches": {
+				Type:     schema.TypeSet,
+				Elem:     &schema.Schema{Type: schema.TypeString},
+				Optional: true,
+			},
 		},
 	}
 }
 
-func createBranchRestriction(d *schema.ResourceData) *bitbucket.Branchrestriction {
+func createBranchRestriction(d *schema.ResourceData) *branchRestrictionBody {
 
 	users := make([]bitbucket.Account, 0, d.Get("users").(*schema.Set).Len())
 
@@ -185,11 +204,24 @@ func createBranchRestriction(d *schema.ResourceData) *bitbucket.Branchrestrictio
 		groups = append(groups, group)
 	}
 
-	restict := &bitbucket.Branchrestriction{
-		Kind:   d.Get("kind").(string),
-		Value:  int32(d.Get("value").(int)),
-		Users:  users,
-		Groups: groups,
+	restict := &branchRestrictionBody{
+		Branchrestriction: bitbucket.Branchrestriction{
+			Kind:   d.Get("kind").(string),
+			Value:  int32(d.Get("value").(int)),
+			Users:  users,
+			Groups: groups,
+		},
+	}
+
+	// Send the list whenever it's set, and send [] when it was just removed
+	// so the update clears it. Otherwise leave it out of the request.
+	sourceBranchSet := d.Get("pipelines_source_branches").(*schema.Set)
+	sourceBranches := make([]string, 0, sourceBranchSet.Len())
+	for _, item := range sourceBranchSet.List() {
+		sourceBranches = append(sourceBranches, item.(string))
+	}
+	if len(sourceBranches) > 0 || d.HasChange("pipelines_source_branches") {
+		restict.PipelinesSourceBranches = &sourceBranches
 	}
 
 	if v, ok := d.GetOk("pattern"); ok {
@@ -208,28 +240,25 @@ func createBranchRestriction(d *schema.ResourceData) *bitbucket.Branchrestrictio
 }
 
 func resourceBranchRestrictionsCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	c := m.(Clients).genClient
-	brApi := c.ApiClient.BranchRestrictionsApi
+	client := m.(Clients).httpClient
 	branchRestriction := createBranchRestriction(d)
 
-	repo := d.Get("repository").(string)
-	workspace := d.Get("owner").(string)
-	branchRestrictionReq, res, err := brApi.RepositoriesWorkspaceRepoSlugBranchRestrictionsPost(c.AuthContext, *branchRestriction, repo, workspace)
-	if err := handleClientError(res, err); err != nil {
+	created, _, err := doBranchRestrictionRequest(client, http.MethodPost,
+		branchRestrictionsEndpoint(d.Get("owner").(string), d.Get("repository").(string), ""), branchRestriction)
+	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	d.SetId(fmt.Sprintf("%v", branchRestrictionReq.Id))
+	d.SetId(fmt.Sprintf("%v", created.Id))
 
 	return resourceBranchRestrictionsRead(ctx, d, m)
 }
 
 func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	c := m.(Clients).genClient
-	brApi := c.ApiClient.BranchRestrictionsApi
+	client := m.(Clients).httpClient
 
-	brRes, res, err := brApi.RepositoriesWorkspaceRepoSlugBranchRestrictionsIdGet(c.AuthContext, url.PathEscape(d.Id()),
-		d.Get("repository").(string), d.Get("owner").(string))
+	brRes, res, err := doBranchRestrictionRequest(client, http.MethodGet,
+		branchRestrictionsEndpoint(d.Get("owner").(string), d.Get("repository").(string), d.Id()), nil)
 
 	if res != nil && res.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Branch Restrictions (%s) not found, removing from state", d.Id())
@@ -237,7 +266,7 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 		return nil
 	}
 
-	if err := handleClientError(res, err); err != nil {
+	if err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -281,20 +310,24 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 	}
 	d.Set("branch_type", brRes.BranchType)
 	d.Set("branch_match_kind", brRes.BranchMatchKind)
+	var sourceBranches []string
+	if brRes.PipelinesSourceBranches != nil {
+		sourceBranches = *brRes.PipelinesSourceBranches
+	}
+	if err := d.Set("pipelines_source_branches", sourceBranches); err != nil {
+		return diag.FromErr(fmt.Errorf("error setting pipelines_source_branches: %w", err))
+	}
 
 	return diags
 }
 
 func resourceBranchRestrictionsUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	c := m.(Clients).genClient
-	brApi := c.ApiClient.BranchRestrictionsApi
+	client := m.(Clients).httpClient
 	branchRestriction := createBranchRestriction(d)
 
-	_, res, err := brApi.RepositoriesWorkspaceRepoSlugBranchRestrictionsIdPut(c.AuthContext,
-		*branchRestriction, url.PathEscape(d.Id()),
-		d.Get("repository").(string), d.Get("owner").(string))
-
-	if err := handleClientError(res, err); err != nil {
+	_, _, err := doBranchRestrictionRequest(client, http.MethodPut,
+		branchRestrictionsEndpoint(d.Get("owner").(string), d.Get("repository").(string), d.Id()), branchRestriction)
+	if err != nil {
 		return diag.FromErr(err)
 	}
 
@@ -318,6 +351,50 @@ func resourceBranchRestrictionsDelete(ctx context.Context, d *schema.ResourceDat
 	}
 
 	return nil
+}
+
+// branchRestrictionsEndpoint returns the 2.0 API path for a repository's
+// branch restrictions, or for one restriction when id is non-empty.
+func branchRestrictionsEndpoint(owner, repo, id string) string {
+	endpoint := fmt.Sprintf("2.0/repositories/%s/%s/branch-restrictions", url.PathEscape(owner), url.PathEscape(repo))
+	if id != "" {
+		endpoint += "/" + url.PathEscape(id)
+	}
+	return endpoint
+}
+
+// doBranchRestrictionRequest sends a branch restriction request through the
+// raw HTTP client rather than the generated one, because the generated
+// bitbucket.Branchrestriction model has no pipelines_source_branches field.
+// body may be nil (for GET). The decoded response is returned along with the
+// raw response, so callers can check for a 404.
+func doBranchRestrictionRequest(client Client, method, endpoint string, body *branchRestrictionBody) (*branchRestrictionBody, *http.Response, error) {
+	var payload *bytes.Buffer
+	if body != nil {
+		data, err := json.Marshal(body)
+		if err != nil {
+			return nil, nil, err
+		}
+		payload = bytes.NewBuffer(data)
+	}
+
+	res, err := client.Do(method, endpoint, payload, "application/json")
+	if err != nil {
+		return nil, res, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, res, err
+	}
+
+	var out branchRestrictionBody
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, res, fmt.Errorf("decoding branch restriction response: %w", err)
+	}
+
+	return &out, res, nil
 }
 
 // expandBranchRestrictionUser builds the Account to send for a users or

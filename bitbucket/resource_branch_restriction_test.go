@@ -1,6 +1,7 @@
 package bitbucket
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -276,6 +277,100 @@ func TestAccBitbucketBranchRestriction_legacyUsername(t *testing.T) {
 	})
 }
 
+// TestAccBitbucketBranchRestriction_reviewGroupApprovals covers the
+// require_review_group_approvals_to_merge kind, which pairs a review group
+// with a minimum approval count. Gated on BITBUCKET_EXISTING_GROUP_SLUG for
+// the same reason as TestAccBitbucketBranchRestriction_groupsExisting.
+func TestAccBitbucketBranchRestriction_reviewGroupApprovals(t *testing.T) {
+	groupSlug := os.Getenv("BITBUCKET_EXISTING_GROUP_SLUG")
+	if groupSlug == "" {
+		t.Skip("BITBUCKET_EXISTING_GROUP_SLUG must be set for this test")
+	}
+
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branch_restriction.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders, //nolint:staticcheck // pre-existing repo-wide pattern; ProviderFactories migration is out of scope
+		CheckDestroy: testAccCheckBitbucketBranchRestrictionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchRestrictionExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "kind", "require_review_group_approvals_to_merge"),
+					resource.TestCheckResourceAttr(resourceName, "value", "1"),
+					resource.TestCheckResourceAttr(resourceName, "groups.#", "1"),
+					resource.TestCheckResourceAttr(resourceName, "groups.0.slug", groupSlug),
+				),
+			},
+			{
+				Config:   testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug),
+				PlanOnly: true,
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestAccBitbucketBranchRestriction_pipelinesSourceBranches verifies that
+// pipelines_source_branches round-trips on create, import and update,
+// including being cleared by removing it from config.
+func TestAccBitbucketBranchRestriction_pipelinesSourceBranches(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branch_restriction.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:     func() { testAccPreCheck(t) },
+		Providers:    testAccProviders, //nolint:staticcheck // pre-existing repo-wide pattern; ProviderFactories migration is out of scope
+		CheckDestroy: testAccCheckBitbucketBranchRestrictionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig(testUser, rName, `["develop", "staging"]`),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchRestrictionExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "pipelines_source_branches.#", "2"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "pipelines_source_branches.*", "develop"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "pipelines_source_branches.*", "staging"),
+				),
+			},
+			{
+				Config:   testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig(testUser, rName, `["develop", "staging"]`),
+				PlanOnly: true,
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+			{
+				Config: testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig(testUser, rName, `["develop"]`),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "pipelines_source_branches.#", "1"),
+					resource.TestCheckTypeSetElemAttr(resourceName, "pipelines_source_branches.*", "develop"),
+				),
+			},
+			{
+				// Removing the attribute must clear it on the API side too,
+				// not leave the old list behind (which would diff forever).
+				Config: testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig(testUser, rName, ""),
+				Check: resource.ComposeTestCheckFunc(
+					resource.TestCheckResourceAttr(resourceName, "pipelines_source_branches.#", "0"),
+				),
+			},
+		},
+	})
+}
+
 func TestCreateBranchRestriction(t *testing.T) {
 	raw := map[string]interface{}{
 		"owner":      "myteam",
@@ -336,6 +431,140 @@ func TestCreateBranchRestriction(t *testing.T) {
 		if group.Owner == nil || !reflect.DeepEqual(*group.Owner, wantOwner) {
 			t.Errorf("group %q owner = %+v, want %+v", group.Slug, group.Owner, wantOwner)
 		}
+	}
+}
+
+func TestCreateBranchRestrictionPipelinesSourceBranches(t *testing.T) {
+	raw := map[string]interface{}{
+		"owner":                     "myteam",
+		"repository":                "my-repo",
+		"kind":                      "push",
+		"pattern":                   "main",
+		"pipelines_source_branches": []interface{}{"develop", "staging"},
+	}
+
+	d := schema.TestResourceDataRaw(t, resourceBranchRestriction().Schema, raw)
+	got := createBranchRestriction(d)
+
+	if got.PipelinesSourceBranches == nil {
+		t.Fatal("PipelinesSourceBranches = nil, want the configured branches")
+	}
+	want := map[string]bool{"develop": true, "staging": true}
+	if len(*got.PipelinesSourceBranches) != len(want) {
+		t.Fatalf("PipelinesSourceBranches = %v, want (any order) [develop staging]", *got.PipelinesSourceBranches)
+	}
+	for _, b := range *got.PipelinesSourceBranches {
+		if !want[b] {
+			t.Errorf("unexpected source branch %q", b)
+		}
+	}
+}
+
+func TestCreateBranchRestrictionOmitsUnsetPipelinesSourceBranches(t *testing.T) {
+	raw := map[string]interface{}{
+		"owner":      "myteam",
+		"repository": "my-repo",
+		"kind":       "push",
+		"pattern":    "main",
+	}
+
+	d := schema.TestResourceDataRaw(t, resourceBranchRestriction().Schema, raw)
+	got := createBranchRestriction(d)
+
+	if got.PipelinesSourceBranches != nil {
+		t.Errorf("PipelinesSourceBranches = %v, want nil when unset", *got.PipelinesSourceBranches)
+	}
+}
+
+// TestBranchRestrictionBodyJSON pins the wire format: the embedded generated
+// model's fields stay at the top level, pipelines_source_branches is omitted
+// when nil and sent as [] when pointing at an empty slice (to clear it).
+func TestBranchRestrictionBodyJSON(t *testing.T) {
+	empty := []string{}
+	branches := []string{"develop"}
+
+	cases := []struct {
+		name      string
+		branches  *[]string
+		wantField bool
+		wantValue []string
+	}{
+		{name: "nil omits field", branches: nil, wantField: false},
+		{name: "empty sends []", branches: &empty, wantField: true, wantValue: []string{}},
+		{name: "values sent", branches: &branches, wantField: true, wantValue: []string{"develop"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			body := branchRestrictionBody{
+				Branchrestriction: bitbucket.Branchrestriction{
+					Kind:            "require_review_group_approvals_to_merge",
+					BranchMatchKind: "glob",
+					Pattern:         "main",
+					Value:           2,
+				},
+				PipelinesSourceBranches: tc.branches,
+			}
+
+			data, err := json.Marshal(body)
+			if err != nil {
+				t.Fatalf("Marshal: %v", err)
+			}
+
+			var m map[string]json.RawMessage
+			if err := json.Unmarshal(data, &m); err != nil {
+				t.Fatalf("Unmarshal: %v", err)
+			}
+
+			if string(m["kind"]) != `"require_review_group_approvals_to_merge"` {
+				t.Errorf("kind = %s, want top-level kind", m["kind"])
+			}
+			if string(m["value"]) != "2" {
+				t.Errorf("value = %s, want 2", m["value"])
+			}
+
+			raw, ok := m["pipelines_source_branches"]
+			if ok != tc.wantField {
+				t.Fatalf("pipelines_source_branches present = %v, want %v (json: %s)", ok, tc.wantField, data)
+			}
+			if !tc.wantField {
+				return
+			}
+			var got []string
+			if err := json.Unmarshal(raw, &got); err != nil {
+				t.Fatalf("Unmarshal pipelines_source_branches: %v", err)
+			}
+			if got == nil || !reflect.DeepEqual(got, tc.wantValue) {
+				t.Errorf("pipelines_source_branches = %s, want %v", raw, tc.wantValue)
+			}
+		})
+	}
+}
+
+// TestBranchRestrictionBodyDecode checks that a response decodes into both
+// the embedded model's fields and the added pipelines_source_branches field.
+func TestBranchRestrictionBodyDecode(t *testing.T) {
+	const resp = `{"id": 42, "kind": "push", "branch_match_kind": "glob", "pattern": "main",
+		"pipelines_source_branches": ["develop"], "users": [], "groups": [], "type": "branchrestriction"}`
+
+	var got branchRestrictionBody
+	if err := json.Unmarshal([]byte(resp), &got); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if got.Id != 42 || got.Kind != "push" || got.Pattern != "main" {
+		t.Errorf("embedded fields = {Id:%d Kind:%q Pattern:%q}, want {42 push main}", got.Id, got.Kind, got.Pattern)
+	}
+	if got.PipelinesSourceBranches == nil || !reflect.DeepEqual(*got.PipelinesSourceBranches, []string{"develop"}) {
+		t.Errorf("PipelinesSourceBranches = %v, want [develop]", got.PipelinesSourceBranches)
+	}
+}
+
+func TestBranchRestrictionsEndpoint(t *testing.T) {
+	if got, want := branchRestrictionsEndpoint("myteam", "my-repo", ""), "2.0/repositories/myteam/my-repo/branch-restrictions"; got != want {
+		t.Errorf("collection endpoint = %q, want %q", got, want)
+	}
+	if got, want := branchRestrictionsEndpoint("myteam", "my-repo", "42"), "2.0/repositories/myteam/my-repo/branch-restrictions/42"; got != want {
+		t.Errorf("item endpoint = %q, want %q", got, want)
 	}
 }
 
@@ -956,6 +1185,68 @@ resource "bitbucket_branch_restriction" "test" {
   users      = [%[3]q]
 }
 `, testUser, rName, legacyUsername)
+}
+
+func testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug string) string {
+	return fmt.Sprintf(`
+data "bitbucket_workspace" "test" {
+  workspace = %[1]q
+}
+
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+
+resource "bitbucket_repository_group_permission" "test" {
+  workspace  = %[1]q
+  repo_slug  = bitbucket_repository.test.name
+  group_slug = %[3]q
+  permission = "write"
+}
+
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = "require_review_group_approvals_to_merge"
+  pattern    = "master"
+  value      = 1
+
+  groups {
+    owner = data.bitbucket_workspace.test.slug
+    slug  = %[3]q
+  }
+
+  depends_on = [bitbucket_repository_group_permission.test]
+}
+`, testUser, rName, groupSlug)
+}
+
+// testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig creates a
+// push restriction with pipelines_source_branches set to sourceBranches (an
+// HCL list literal), or without the attribute when sourceBranches is "", so a
+// later step can drop it and update the same restriction in place. It uses
+// push because Bitbucket rejects the field on kinds such as force ("kind
+// force requires pipelines_source_branches to be empty, null, or omitted").
+func testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig(testUser, rName, sourceBranches string) string {
+	sourceBranchesLine := ""
+	if sourceBranches != "" {
+		sourceBranchesLine = "pipelines_source_branches = " + sourceBranches
+	}
+
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = "push"
+  pattern    = "master"
+  %[3]s
+}
+`, testUser, rName, sourceBranchesLine)
 }
 
 func testAccCheckBitbucketBranchRestrictionDestroy(s *terraform.State) error {
