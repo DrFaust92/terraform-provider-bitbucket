@@ -119,9 +119,13 @@ func Provider() *schema.Provider {
 	}
 }
 
+// httpTimeout bounds each API request so an unresponsive endpoint cannot hang
+// a plan or apply indefinitely.
+const httpTimeout = 2 * time.Minute
+
 func newHTTPClient() *http.Client {
 	client := retryablehttp.NewClient()
-	client.HTTPClient = &http.Client{}
+	client.HTTPClient = &http.Client{Timeout: httpTimeout}
 	client.Logger = nil
 	client.RetryMax = 5
 	client.RetryWaitMax = 10 * time.Second
