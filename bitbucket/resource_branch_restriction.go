@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/hashicorp/go-cty/cty"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -61,6 +62,7 @@ func resourceBranchRestriction() *schema.Resource {
 		ReadContext:   resourceBranchRestrictionsRead,
 		UpdateContext: resourceBranchRestrictionsUpdate,
 		DeleteContext: resourceBranchRestrictionsDelete,
+		CustomizeDiff: branchRestrictionCustomizeDiff,
 		Importer: &schema.ResourceImporter{
 			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
 				idParts := strings.Split(d.Id(), "/")
@@ -179,6 +181,44 @@ func resourceBranchRestriction() *schema.Resource {
 			},
 		},
 	}
+}
+
+// branchRestrictionCustomizeDiff catches, at plan time, configurations that
+// Bitbucket rejects on apply.
+func branchRestrictionCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _ interface{}) error {
+	return validateBranchRestrictionFields(
+		d.Get("kind").(string),
+		configAttrSet(d.GetRawConfig(), "value"),
+		d.Get("users").(*schema.Set).Len(),
+		d.Get("groups").(*schema.Set).Len(),
+	)
+}
+
+// configAttrSet reports whether attr is set in config. d.Get can't tell
+// `value = 0` from an unset value, so this looks at the raw config.
+func configAttrSet(config cty.Value, attr string) bool {
+	if config.IsNull() || !config.IsKnown() || !config.Type().IsObjectType() || !config.Type().HasAttribute(attr) {
+		return false
+	}
+	return !config.GetAttr(attr).IsNull()
+}
+
+// validateBranchRestrictionFields rejects fields that a kind doesn't accept.
+// require_review_group_approvals_to_merge is an on/off restriction: Bitbucket
+// answers it with HTTP 400 when value is set ("can't accept non-null value")
+// or when users or groups are set ("requires users and groups to be empty,
+// null, or omitted").
+func validateBranchRestrictionFields(kind string, valueSet bool, users, groups int) error {
+	if kind != "require_review_group_approvals_to_merge" {
+		return nil
+	}
+	if valueSet {
+		return fmt.Errorf("kind %q does not accept value; leave it unset", kind)
+	}
+	if users > 0 || groups > 0 {
+		return fmt.Errorf("kind %q does not accept users or groups; leave them unset", kind)
+	}
+	return nil
 }
 
 func createBranchRestriction(d *schema.ResourceData) *branchRestrictionBody {

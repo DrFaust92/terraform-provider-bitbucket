@@ -3,10 +3,12 @@ package bitbucket
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/hashicorp/go-cty/cty"
 	"net/http"
 	"net/url"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -278,15 +280,10 @@ func TestAccBitbucketBranchRestriction_legacyUsername(t *testing.T) {
 }
 
 // TestAccBitbucketBranchRestriction_reviewGroupApprovals covers the
-// require_review_group_approvals_to_merge kind, which pairs a review group
-// with a minimum approval count. Gated on BITBUCKET_EXISTING_GROUP_SLUG for
-// the same reason as TestAccBitbucketBranchRestriction_groupsExisting.
+// require_review_group_approvals_to_merge kind, an on/off restriction.
+// Bitbucket rejects it with HTTP 400 when value, users or groups are set, and
+// the provider catches that at plan time.
 func TestAccBitbucketBranchRestriction_reviewGroupApprovals(t *testing.T) {
-	groupSlug := os.Getenv("BITBUCKET_EXISTING_GROUP_SLUG")
-	if groupSlug == "" {
-		t.Skip("BITBUCKET_EXISTING_GROUP_SLUG must be set for this test")
-	}
-
 	rName := acctest.RandomWithPrefix("tf-test")
 	testUser := os.Getenv("BITBUCKET_TEAM")
 	resourceName := "bitbucket_branch_restriction.test"
@@ -297,17 +294,27 @@ func TestAccBitbucketBranchRestriction_reviewGroupApprovals(t *testing.T) {
 		CheckDestroy: testAccCheckBitbucketBranchRestrictionDestroy,
 		Steps: []resource.TestStep{
 			{
-				Config: testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug),
+				Config:      testAccBitbucketBranchRestrictionReviewGroupApprovalsInvalidConfig(testUser, rName, "value = 1"),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`does not accept value`),
+			},
+			{
+				Config:      testAccBitbucketBranchRestrictionReviewGroupApprovalsInvalidConfig(testUser, rName, fmt.Sprintf("groups {\n    owner = %q\n    slug  = \"any-group\"\n  }", testUser)),
+				PlanOnly:    true,
+				ExpectError: regexp.MustCompile(`does not accept users or groups`),
+			},
+			{
+				Config: testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckBitbucketBranchRestrictionExists(resourceName),
 					resource.TestCheckResourceAttr(resourceName, "kind", "require_review_group_approvals_to_merge"),
-					resource.TestCheckResourceAttr(resourceName, "value", "1"),
-					resource.TestCheckResourceAttr(resourceName, "groups.#", "1"),
-					resource.TestCheckResourceAttr(resourceName, "groups.0.slug", groupSlug),
+					resource.TestCheckResourceAttr(resourceName, "value", "0"),
+					resource.TestCheckResourceAttr(resourceName, "users.#", "0"),
+					resource.TestCheckResourceAttr(resourceName, "groups.#", "0"),
 				),
 			},
 			{
-				Config:   testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug),
+				Config:   testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName),
 				PlanOnly: true,
 			},
 			{
@@ -594,6 +601,53 @@ func sameAccountSet(got, want []bitbucket.Account) bool {
 	}
 
 	return true
+}
+
+func TestValidateBranchRestrictionFields(t *testing.T) {
+	const reviewGroup = "require_review_group_approvals_to_merge"
+	cases := []struct {
+		kind          string
+		valueSet      bool
+		users, groups int
+		wantErr       string
+	}{
+		{reviewGroup, false, 0, 0, ""},
+		{reviewGroup, true, 0, 0, "does not accept value"},
+		{reviewGroup, false, 0, 1, "does not accept users or groups"},
+		{reviewGroup, false, 1, 0, "does not accept users or groups"},
+		{"push", true, 1, 1, ""},
+		{"require_approvals_to_merge", true, 0, 0, ""},
+	}
+
+	for _, tc := range cases {
+		err := validateBranchRestrictionFields(tc.kind, tc.valueSet, tc.users, tc.groups)
+		if tc.wantErr == "" && err != nil || tc.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tc.wantErr)) {
+			t.Errorf("validateBranchRestrictionFields(%q, %t, %d, %d) = %v, want error containing %q", tc.kind, tc.valueSet, tc.users, tc.groups, err, tc.wantErr)
+		}
+	}
+
+	if resourceBranchRestriction().CustomizeDiff == nil {
+		t.Error("bitbucket_branch_restriction must run the field check at plan time")
+	}
+}
+
+func TestConfigAttrSet(t *testing.T) {
+	obj := func(v cty.Value) cty.Value { return cty.ObjectVal(map[string]cty.Value{"value": v}) }
+	cases := map[string]struct {
+		config cty.Value
+		want   bool
+	}{
+		"zero":     {obj(cty.NumberIntVal(0)), true},
+		"non-zero": {obj(cty.NumberIntVal(2)), true},
+		"null":     {obj(cty.NullVal(cty.Number)), false},
+		"no attr":  {cty.EmptyObjectVal, false},
+		"unknown":  {cty.UnknownVal(cty.EmptyObject), false},
+	}
+	for name, tc := range cases {
+		if got := configAttrSet(tc.config, "value"); got != tc.want {
+			t.Errorf("%s: configAttrSet = %t, want %t", name, got, tc.want)
+		}
+	}
 }
 
 func TestExpandBranchRestrictionUser(t *testing.T) {
@@ -1187,22 +1241,11 @@ resource "bitbucket_branch_restriction" "test" {
 `, testUser, rName, legacyUsername)
 }
 
-func testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName, groupSlug string) string {
+func testAccBitbucketBranchRestrictionReviewGroupApprovalsConfig(testUser, rName string) string {
 	return fmt.Sprintf(`
-data "bitbucket_workspace" "test" {
-  workspace = %[1]q
-}
-
 resource "bitbucket_repository" "test" {
   owner = %[1]q
   name  = %[2]q
-}
-
-resource "bitbucket_repository_group_permission" "test" {
-  workspace  = %[1]q
-  repo_slug  = bitbucket_repository.test.name
-  group_slug = %[3]q
-  permission = "write"
 }
 
 resource "bitbucket_branch_restriction" "test" {
@@ -1210,16 +1253,30 @@ resource "bitbucket_branch_restriction" "test" {
   repository = bitbucket_repository.test.name
   kind       = "require_review_group_approvals_to_merge"
   pattern    = "master"
-  value      = 1
-
-  groups {
-    owner = data.bitbucket_workspace.test.slug
-    slug  = %[3]q
-  }
-
-  depends_on = [bitbucket_repository_group_permission.test]
 }
-`, testUser, rName, groupSlug)
+`, testUser, rName)
+}
+
+// testAccBitbucketBranchRestrictionReviewGroupApprovalsInvalidConfig adds
+// extra (a field the kind doesn't accept) to a
+// require_review_group_approvals_to_merge restriction, which the provider must
+// reject at plan time. Nothing is looked up, so placeholder values will do.
+func testAccBitbucketBranchRestrictionReviewGroupApprovalsInvalidConfig(testUser, rName, extra string) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = "require_review_group_approvals_to_merge"
+  pattern    = "master"
+
+  %[3]s
+}
+`, testUser, rName, extra)
 }
 
 // testAccBitbucketBranchRestrictionPipelinesSourceBranchesConfig creates a

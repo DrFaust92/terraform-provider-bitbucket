@@ -2,7 +2,7 @@
 
 ### Features
 
-* `bitbucket_branch_restriction`: accept `kind = "require_review_group_approvals_to_merge"`, and add the optional `pipelines_source_branches` argument. Create, read and update now call the branch-restrictions API directly, because the generated API client has no field for `pipelines_source_branches`.
+* `bitbucket_branch_restriction`: accept `kind = "require_review_group_approvals_to_merge"`, an on/off restriction that takes no `value`, `users` or `groups` (setting any of them fails at plan time), and add the optional `pipelines_source_branches` argument. Create, read and update now call the branch-restrictions API directly, because the generated API client has no field for `pipelines_source_branches`.
 
 ### Bug fixes
 
