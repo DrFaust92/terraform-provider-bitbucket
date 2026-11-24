@@ -10,5 +10,6 @@
   ],
   "vulnerabilityAlerts": {
     "groupName": "security updates"
-  }
+  },
+  "forkProcessing": "enabled"
 }
