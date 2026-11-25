@@ -72,7 +72,11 @@ func resourceGroupsCreate(ctx context.Context, d *schema.ResourceData, m interfa
 
 	workspace := d.Get("workspace").(string)
 	body := []byte(fmt.Sprintf("name=%s", group.Name))
-	groupReq, err := client.PostNonJson(fmt.Sprintf("1.0/groups/%s", workspace), bytes.NewBuffer(body))
+	wsSlug, wsErr := groupsWorkspace(client, workspace)
+	if wsErr != nil {
+		return diag.FromErr(wsErr)
+	}
+	groupReq, err := client.PostNonJson(fmt.Sprintf("1.0/groups/%s", wsSlug), bytes.NewBuffer(body))
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -104,7 +108,11 @@ func resourceGroupsRead(ctx context.Context, d *schema.ResourceData, m interface
 		return diag.FromErr(err)
 	}
 
-	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s", workspace, slug))
+	wsSlug, wsErr := groupsWorkspace(client, workspace)
+	if wsErr != nil {
+		return diag.FromErr(wsErr)
+	}
+	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s", wsSlug, slug))
 
 	if groupsReq != nil && groupsReq.StatusCode == http.StatusNotFound {
 		log.Printf("[WARN] Group (%s) not found, removing from state", d.Id())
@@ -157,8 +165,12 @@ func resourceGroupsUpdate(ctx context.Context, d *schema.ResourceData, m interfa
 		return diag.FromErr(err)
 	}
 
+	wsSlug, wsErr := groupsWorkspace(client, d.Get("workspace").(string))
+	if wsErr != nil {
+		return diag.FromErr(wsErr)
+	}
 	_, err = client.Put(fmt.Sprintf("1.0/groups/%s/%s/",
-		d.Get("workspace").(string), d.Get("slug").(string)), bytes.NewBuffer(bytedata))
+		wsSlug, d.Get("slug").(string)), bytes.NewBuffer(bytedata))
 
 	if err != nil {
 		return diag.FromErr(err)
@@ -175,7 +187,11 @@ func resourceGroupsDelete(ctx context.Context, d *schema.ResourceData, m interfa
 		return diag.FromErr(err)
 	}
 
-	_, err = client.Delete(fmt.Sprintf("1.0/groups/%s/%s", workspace, slug))
+	wsSlug, wsErr := groupsWorkspace(client, workspace)
+	if wsErr != nil {
+		return diag.FromErr(wsErr)
+	}
+	_, err = client.Delete(fmt.Sprintf("1.0/groups/%s/%s", wsSlug, slug))
 
 	if err != nil {
 		return diag.FromErr(err)

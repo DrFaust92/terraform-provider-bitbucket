@@ -50,7 +50,11 @@ func dataReadGroup(ctx context.Context, d *schema.ResourceData, m interface{}) d
 	workspace := d.Get("workspace").(string)
 	slug := d.Get("slug").(string)
 
-	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s", workspace, slug))
+	wsSlug, wsErr := groupsWorkspace(client, workspace)
+	if wsErr != nil {
+		return diag.FromErr(wsErr)
+	}
+	groupsReq, err := client.Get(fmt.Sprintf("1.0/groups/%s/%s", wsSlug, slug))
 
 	if err != nil {
 		return diag.FromErr(err)

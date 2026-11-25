@@ -25,7 +25,7 @@ data "bitbucket_groups" "example" {
 
 The following arguments are supported:
 
-* `workspace` - (Required) The UUID that bitbucket groupss to connect a groups to various objects
+* `workspace` - (Required) The workspace slug or UUID. A UUID, such as the `id` of the `bitbucket_workspace` data source, is resolved to the slug, which the groups API requires.
 
 ## Attributes Reference
 
