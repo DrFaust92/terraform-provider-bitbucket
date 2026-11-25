@@ -20,7 +20,7 @@ func TestNewHTTPClientRetriesRateLimit(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := newHTTPClient().Post(srv.URL, "application/json", strings.NewReader(`{"a":1}`))
+	resp, err := newHTTPClient(defaultHTTPTimeout, defaultMaxRetries).Post(srv.URL, "application/json", strings.NewReader(`{"a":1}`))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestNewHTTPClientDoesNotRetryOtherErrors(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := newHTTPClient().Get(srv.URL)
+	resp, err := newHTTPClient(defaultHTTPTimeout, defaultMaxRetries).Get(srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestNewHTTPClientGivesUpAfterRetryMax(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	resp, err := newHTTPClient().Get(srv.URL)
+	resp, err := newHTTPClient(defaultHTTPTimeout, defaultMaxRetries).Get(srv.URL)
 	if err != nil {
 		t.Fatal(err)
 	}

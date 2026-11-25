@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/DrFaust92/bitbucket-go-client"
 	"github.com/hashicorp/go-retryablehttp"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 	oauth2bitbucket "golang.org/x/oauth2/bitbucket"
 	oauth2clientcreds "golang.org/x/oauth2/clientcredentials"
 )
@@ -67,6 +69,27 @@ func Provider() *schema.Provider {
 				DefaultFunc:   schema.MultiEnvDefaultFunc([]string{"BITBUCKET_OAUTH_TOKEN", "BITBUCKET_ACCESS_TOKEN"}, nil),
 				ConflictsWith: []string{"username", "password", "oauth_client_id", "oauth_client_secret"},
 			},
+			"api_url": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("BITBUCKET_API_URL", BitbucketEndpoint),
+				ValidateFunc: validation.IsURLWithHTTPorHTTPS,
+				Description:  "Base URL of the Bitbucket Cloud API, for example to go through a proxy or an API mock. Can also be set with the `BITBUCKET_API_URL` environment variable. Defaults to `" + BitbucketEndpoint + "`.",
+			},
+			"timeout": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("BITBUCKET_TIMEOUT", defaultHTTPTimeout.String()),
+				ValidateFunc: validatePositiveDuration,
+				Description:  "Timeout of each API request, as a duration such as `30s` or `5m`. Can also be set with the `BITBUCKET_TIMEOUT` environment variable. Defaults to `2m`.",
+			},
+			"max_retries": {
+				Type:         schema.TypeInt,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("BITBUCKET_MAX_RETRIES", defaultMaxRetries),
+				ValidateFunc: validation.IntAtLeast(0),
+				Description:  "How many times to retry a request that Bitbucket rate limits (HTTP 429). Can also be set with the `BITBUCKET_MAX_RETRIES` environment variable. Defaults to `5`.",
+			},
 		},
 		ConfigureFunc: providerConfigure,
 		ResourcesMap: map[string]*schema.Resource{
@@ -119,15 +142,19 @@ func Provider() *schema.Provider {
 	}
 }
 
-// httpTimeout bounds each API request so an unresponsive endpoint cannot hang
-// a plan or apply indefinitely.
-const httpTimeout = 2 * time.Minute
+const (
+	// defaultHTTPTimeout bounds each API request so an unresponsive endpoint
+	// cannot hang a plan or apply indefinitely.
+	defaultHTTPTimeout = 2 * time.Minute
+	// defaultMaxRetries is how often a rate-limited request is retried.
+	defaultMaxRetries = 5
+)
 
-func newHTTPClient() *http.Client {
+func newHTTPClient(timeout time.Duration, maxRetries int) *http.Client {
 	client := retryablehttp.NewClient()
-	client.HTTPClient = &http.Client{Timeout: httpTimeout}
+	client.HTTPClient = &http.Client{Timeout: timeout}
 	client.Logger = nil
-	client.RetryMax = 5
+	client.RetryMax = maxRetries
 	client.RetryWaitMax = 10 * time.Second
 	client.RequestLogHook = func(_ retryablehttp.Logger, req *http.Request, attempt int) {
 		if attempt > 0 {
@@ -150,9 +177,19 @@ func newHTTPClient() *http.Client {
 func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	authCtx := context.Background()
 
-	httpClient := newHTTPClient()
+	timeout, err := time.ParseDuration(d.Get("timeout").(string))
+	if err != nil {
+		return nil, fmt.Errorf("timeout: %w", err)
+	}
+	baseURL := d.Get("api_url").(string)
+	if !strings.HasSuffix(baseURL, "/") {
+		baseURL += "/"
+	}
+
+	httpClient := newHTTPClient(timeout, d.Get("max_retries").(int))
 	client := &Client{
 		HTTPClient: httpClient,
+		BaseURL:    baseURL,
 	}
 
 	if username, ok := d.GetOk("username"); ok {
@@ -200,6 +237,7 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 
 	conf := bitbucket.NewConfiguration()
 	conf.HTTPClient = httpClient
+	conf.BasePath = baseURL + "2.0"
 	apiClient := ProviderConfig{
 		ApiClient:   bitbucket.NewAPIClient(conf),
 		AuthContext: authCtx,
@@ -211,4 +249,16 @@ func providerConfigure(d *schema.ResourceData) (interface{}, error) {
 	}
 
 	return clients, nil
+}
+
+// validatePositiveDuration accepts a positive Go duration such as "30s" or "5m".
+func validatePositiveDuration(v interface{}, k string) ([]string, []error) {
+	d, err := time.ParseDuration(v.(string))
+	if err != nil {
+		return nil, []error{fmt.Errorf("%q must be a duration such as 30s or 5m: %w", k, err)}
+	}
+	if d <= 0 {
+		return nil, []error{fmt.Errorf("%q must be positive", k)}
+	}
+	return nil, nil
 }
