@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"strings"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -63,4 +64,12 @@ func pemEncode(b []byte, block string) (string, error) {
 	}
 
 	return buf.String(), nil
+}
+
+// formatTime formats t in RFC 3339, or returns "" for the zero time.
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(time.RFC3339)
 }

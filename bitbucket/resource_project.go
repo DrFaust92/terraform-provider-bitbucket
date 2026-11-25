@@ -31,6 +31,11 @@ func resourceProject() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"enforced_signed_commits": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether signed commits are required for the project: true when the workspace is on a Premium plan and enforcement is on for the project or its workspace.",
+			},
 			"key": {
 				Type:         schema.TypeString,
 				Required:     true,
@@ -224,6 +229,7 @@ func resourceProjectRead(ctx context.Context, d *schema.ResourceData, m interfac
 	d.Set("description", projRes.Description)
 	d.Set("has_publicly_visible_repos", projRes.HasPubliclyVisibleRepos)
 	d.Set("uuid", projRes.Uuid)
+	d.Set("enforced_signed_commits", projRes.EnforcedSignedCommits)
 	d.Set("link", flattenProjectLinks(projRes.Links))
 
 	return nil

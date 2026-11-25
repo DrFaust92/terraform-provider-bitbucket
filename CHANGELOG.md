@@ -2,6 +2,7 @@
 
 ### Features
 
+* `enforced_signed_commits` on `bitbucket_repository`, `bitbucket_project` and their data sources; `is_personal`, `is_privacy_enforced`, `forking_mode` and `enforced_signed_commits` on the `bitbucket_workspace` data source; `fingerprint`, `expires_on` and `last_used` on `bitbucket_ssh_key`; `added_on`, `expires_on` and `last_used` on `bitbucket_gpg_key`
 * **New resource:** `bitbucket_pipeline_runner`, a self-hosted Pipelines runner for a workspace or a repository
 * provider: new `api_url`, `timeout` and `max_retries` arguments (`BITBUCKET_API_URL`, `BITBUCKET_TIMEOUT`, `BITBUCKET_MAX_RETRIES`)
 * `bitbucket_branch_restriction`: support the `require_all_comments_resolved` kind

@@ -25,6 +25,21 @@ func resourceGpgKey() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"added_on": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "When the key was added, in RFC 3339 format.",
+			},
+			"expires_on": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "When the key expires, in RFC 3339 format. Empty if it does not expire.",
+			},
+			"last_used": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "When the key was last used, in RFC 3339 format. Empty if it has not been used.",
+			},
 			"user": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -107,6 +122,9 @@ func resourceGpgKeysRead(ctx context.Context, d *schema.ResourceData, m interfac
 	d.Set("name", gpgKeyReq.Name)
 	d.Set("fingerprint", gpgKeyReq.Fingerprint)
 	d.Set("key_id", gpgKeyReq.KeyId)
+	d.Set("added_on", formatTime(gpgKeyReq.AddedOn))
+	d.Set("expires_on", formatTime(gpgKeyReq.ExpiresOn))
+	d.Set("last_used", formatTime(gpgKeyReq.LastUsed))
 
 	return nil
 }

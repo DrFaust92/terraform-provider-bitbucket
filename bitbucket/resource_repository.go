@@ -29,6 +29,11 @@ func resourceRepository() *schema.Resource {
 			StateContext: schema.ImportStatePassthroughContext,
 		},
 		Schema: map[string]*schema.Schema{
+			"enforced_signed_commits": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether signed commits are required for the repository: true when the workspace is on a Premium plan and enforcement is on for the repository, its project or its workspace.",
+			},
 			"scm": {
 				Type:         schema.TypeString,
 				Optional:     true,
@@ -380,6 +385,7 @@ func resourceRepositoryRead(ctx context.Context, d *schema.ResourceData, m inter
 	d.Set("description", repoRes.Description)
 	d.Set("project_key", repoRes.Project.Key)
 	d.Set("uuid", repoRes.Uuid)
+	d.Set("enforced_signed_commits", repoRes.EnforcedSignedCommits)
 
 	for _, cloneURL := range repoRes.Links.Clone {
 		if cloneURL.Name == "https" {

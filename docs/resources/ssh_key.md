@@ -37,6 +37,9 @@ The following arguments are supported:
 
 * `uuid` - The SSH key's UUID value.
 * `comment` - The comment parsed from the SSH key (if present)
+* `fingerprint` - The SHA-256 fingerprint of the key.
+* `expires_on` - When the key expires, in RFC 3339 format. Empty if it does not expire.
+* `last_used` - When the key was last used, in RFC 3339 format. Empty if it has not been used.
 
 ## Import
 

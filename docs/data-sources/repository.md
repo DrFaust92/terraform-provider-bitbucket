@@ -80,3 +80,4 @@ Read-Only:
 * `is_private` - If project is private
 * `key` - Project key
 * `name` - Project name
+* `enforced_signed_commits` - Whether signed commits are required for the repository. True when the workspace is on a Premium plan and enforcement is on for the repository, its project or its workspace.
