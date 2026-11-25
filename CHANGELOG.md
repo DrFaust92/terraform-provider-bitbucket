@@ -2,6 +2,7 @@
 
 ### Features
 
+* provider: new `api_url`, `timeout` and `max_retries` arguments (`BITBUCKET_API_URL`, `BITBUCKET_TIMEOUT`, `BITBUCKET_MAX_RETRIES`)
 * `bitbucket_branch_restriction`: support the `require_all_comments_resolved` kind
 * `bitbucket_branch_restriction`: accept `kind = "require_review_group_approvals_to_merge"`, an on/off restriction that takes no `value`, `users` or `groups` (setting any of them fails at plan time), and add the optional `pipelines_source_branches` argument. Create, read and update now call the branch-restrictions API directly, because the generated API client has no field for `pipelines_source_branches`.
 

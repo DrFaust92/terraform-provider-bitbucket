@@ -56,11 +56,20 @@ type Client struct {
 	OAuthToken       *string
 	OAuthTokenSource oauth2.TokenSource
 	HTTPClient       *http.Client
+	// BaseURL is the API base URL, ending in "/". Empty means BitbucketEndpoint.
+	BaseURL string
+}
+
+func (c *Client) baseURL() string {
+	if c.BaseURL != "" {
+		return c.BaseURL
+	}
+	return BitbucketEndpoint
 }
 
 // Do Will just call the bitbucket api but also add auth to it and some extra headers
 func (c *Client) Do(method, endpoint string, payload *bytes.Buffer, contentType string) (*http.Response, error) {
-	absoluteendpoint := BitbucketEndpoint + endpoint
+	absoluteendpoint := c.baseURL() + endpoint
 	log.Printf("[DEBUG] Sending request to %s %s", method, absoluteendpoint)
 
 	var bodyreader io.Reader
@@ -134,7 +143,7 @@ func (c *Client) Do(method, endpoint string, payload *bytes.Buffer, contentType 
 
 // Get is just a helper method to do but with a GET verb
 func (c *Client) GetNext(next string, out interface{}) (*http.Response, error) {
-	endpoint, ok := strings.CutPrefix(next, BitbucketEndpoint)
+	endpoint, ok := strings.CutPrefix(next, c.baseURL())
 	if !ok {
 		return nil, fmt.Errorf("unexpected pagination link %q", next)
 	}

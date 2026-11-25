@@ -88,6 +88,19 @@ The following arguments are supported in the `provider` block:
   to a user, so `bitbucket_current_user`, the group resources and data sources,
   and deploy keys don't work with them.
 
+* `api_url` - (Optional) Base URL of the Bitbucket Cloud API, for example to go
+  through a proxy or an API mock. You can also set this via the
+  `BITBUCKET_API_URL` environment variable. Defaults to `https://api.bitbucket.org/`.
+
+* `timeout` - (Optional) Timeout of each API request, as a duration such as
+  `30s` or `5m`. You can also set this via the `BITBUCKET_TIMEOUT` environment
+  variable. Defaults to `2m`.
+
+* `max_retries` - (Optional) How many times to retry a request that Bitbucket
+  rate limits (HTTP 429), waiting as long as its `Retry-After` header asks.
+  You can also set this via the `BITBUCKET_MAX_RETRIES` environment variable.
+  Defaults to `5`.
+
 ## Permission Scopes
 
 To interact with the Bitbucket API, an [API Token](https://support.atlassian.com/bitbucket-cloud/docs/api-tokens/)
