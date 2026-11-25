@@ -75,6 +75,7 @@ The following arguments are supported:
 * `clone_ssh` - The SSH clone URL.
 * `clone_https` - The HTTPS clone URL.
 * `uuid` - the uuid of the repository resource.
+* `enforced_signed_commits` - Whether signed commits are required for the repository. True when the workspace is on a Premium plan and enforcement is on for the repository, its project or its workspace.
 
 ## Import
 

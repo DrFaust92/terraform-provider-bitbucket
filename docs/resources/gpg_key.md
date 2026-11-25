@@ -37,6 +37,9 @@ The following arguments are supported:
 
 * `fingerprint` - The GPG key fingerprint.
 * `key_id` - The unique identifier for the GPG key.
+* `added_on` - When the key was added, in RFC 3339 format.
+* `expires_on` - When the key expires, in RFC 3339 format. Empty if it does not expire.
+* `last_used` - When the key was last used, in RFC 3339 format. Empty if it has not been used.
 
 ## Import
 

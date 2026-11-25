@@ -33,6 +33,21 @@ func resourceSshKey() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
+			"fingerprint": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "The SHA-256 fingerprint of the key.",
+			},
+			"expires_on": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "When the key expires, in RFC 3339 format. Empty if it does not expire.",
+			},
+			"last_used": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "When the key was last used, in RFC 3339 format. Empty if it has not been used.",
+			},
 			"user": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -113,6 +128,9 @@ func resourceSshKeysRead(ctx context.Context, d *schema.ResourceData, m interfac
 	d.Set("label", sshKeyReq.Label)
 	d.Set("uuid", sshKeyReq.Uuid)
 	d.Set("comment", sshKeyReq.Comment)
+	d.Set("fingerprint", sshKeyReq.Fingerprint)
+	d.Set("expires_on", formatTime(sshKeyReq.ExpiresOn))
+	d.Set("last_used", formatTime(sshKeyReq.LastUsed))
 
 	return nil
 }

@@ -63,3 +63,4 @@ The following arguments are supported:
 * `display_name` -  Owner display name
 * `username` -  Owner username
 * `uuid` -  Owner UUID
+* `enforced_signed_commits` - Whether signed commits are required for the project. True when the workspace is on a Premium plan and enforcement is on for the project or its workspace.

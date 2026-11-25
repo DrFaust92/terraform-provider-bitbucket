@@ -47,6 +47,7 @@ The following arguments are supported:
 
 * `uuid` - The project's immutable id.
 * `has_publicly_visible_repos` - Indicates whether the project contains publicly visible repositories. Note that private projects cannot contain public repositories.
+* `enforced_signed_commits` - Whether signed commits are required for the project. True when the workspace is on a Premium plan and enforcement is on for the project or its workspace.
 
 ## Import
 

@@ -23,6 +23,11 @@ func dataProject() *schema.Resource {
 		Description: "Datasource to retrieve project information",
 
 		Schema: map[string]*schema.Schema{
+			"enforced_signed_commits": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether signed commits are required for the project: true when the workspace is on a Premium plan and enforcement is on for the project or its workspace.",
+			},
 			"key": {
 				Type:         schema.TypeString,
 				Description:  "Project key",
@@ -183,6 +188,7 @@ func dataReadProject(ctx context.Context, d *schema.ResourceData, m interface{})
 	d.Set("description", project.Description)
 	d.Set("has_publicly_visible_repos", project.HasPubliclyVisibleRepos)
 	d.Set("uuid", project.Uuid)
+	d.Set("enforced_signed_commits", project.EnforcedSignedCommits)
 	d.Set("link", flattenProjectLinks(project.Links))
 
 	return nil

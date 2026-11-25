@@ -19,6 +19,11 @@ func dataRepository() *schema.Resource {
 		ReadWithoutTimeout: dataReadRepository,
 		Description:        "Datasource to retrieve repository information",
 		Schema: map[string]*schema.Schema{
+			"enforced_signed_commits": {
+				Type:        schema.TypeBool,
+				Computed:    true,
+				Description: "Whether signed commits are required for the repository: true when the workspace is on a Premium plan and enforcement is on for the repository, its project or its workspace.",
+			},
 			"workspace": {
 				Type:         schema.TypeString,
 				Description:  "Workspace slug or UUID",
@@ -215,6 +220,7 @@ func flattenRepository(r *bitbucket.Repository, d *schema.ResourceData) {
 	d.Set("has_issues", r.HasIssues)
 	d.Set("scm", r.Scm)
 	d.Set("uuid", r.Uuid)
+	d.Set("enforced_signed_commits", r.EnforcedSignedCommits)
 	if r.Mainbranch != nil {
 		d.Set("main_branch", r.Mainbranch.Name)
 	}
