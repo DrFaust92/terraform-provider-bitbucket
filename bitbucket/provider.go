@@ -107,6 +107,7 @@ func Provider() *schema.Provider {
 			"bitbucket_hook":                        resourceHook(),
 			"bitbucket_pipeline_schedule":           resourcePipelineSchedule(),
 			"bitbucket_pipeline_ssh_key":            resourcePipelineSshKey(),
+			"bitbucket_pipeline_runner":             resourcePipelineRunner(),
 			"bitbucket_pipeline_ssh_known_host":     resourcePipelineSshKnownHost(),
 			"bitbucket_project":                     resourceProject(),
 			"bitbucket_project_branching_model":     resourceProjectBranchingModel(),
