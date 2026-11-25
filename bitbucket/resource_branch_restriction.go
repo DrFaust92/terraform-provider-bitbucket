@@ -81,6 +81,7 @@ func resourceBranchRestriction() *schema.Resource {
 					"enforce_merge_checks",
 					"force",
 					"push",
+					"require_all_comments_resolved",
 					"require_all_dependencies_merged",
 					"require_approvals_to_merge",
 					"require_commits_behind",

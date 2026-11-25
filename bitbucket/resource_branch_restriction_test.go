@@ -51,6 +51,49 @@ func TestAccBitbucketBranchRestriction_basic(t *testing.T) {
 	})
 }
 
+func TestAccBitbucketBranchRestriction_requireAllCommentsResolved(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branch_restriction.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketBranchRestrictionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchRestrictionKindConfig(testUser, rName, "require_all_comments_resolved"),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchRestrictionExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "kind", "require_all_comments_resolved"),
+					resource.TestCheckResourceAttr(resourceName, "pattern", "master"),
+				),
+			},
+			{
+				Config:   testAccBitbucketBranchRestrictionKindConfig(testUser, rName, "require_all_comments_resolved"),
+				PlanOnly: true,
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+func TestBranchRestrictionKindValidation(t *testing.T) {
+	validate := resourceBranchRestriction().Schema["kind"].ValidateFunc
+
+	if _, errs := validate("require_all_comments_resolved", "kind"); len(errs) > 0 {
+		t.Errorf("expected require_all_comments_resolved to be valid, got %v", errs)
+	}
+	if _, errs := validate("not_a_kind", "kind"); len(errs) == 0 {
+		t.Error("expected not_a_kind to be rejected")
+	}
+}
+
 func TestAccBitbucketBranchRestriction_model(t *testing.T) {
 	rName := acctest.RandomWithPrefix("tf-test")
 	testUser := os.Getenv("BITBUCKET_TEAM")
@@ -797,6 +840,21 @@ resource "bitbucket_branch_restriction" "test" {
   pattern    = "master"
 }
 `, testUser, rName)
+}
+
+func testAccBitbucketBranchRestrictionKindConfig(testUser, rName, kind string) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = %[3]q
+  pattern    = "master"
+}
+`, testUser, rName, kind)
 }
 
 func testAccBitbucketBranchRestrictionModelConfig(testUser, rName string) string {
