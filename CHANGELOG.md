@@ -10,6 +10,7 @@
 
 ### Bug fixes
 
+* `bitbucket_branch_restriction`: `value = 0` is now sent to Bitbucket on create and update instead of being dropped by the generated client's `omitempty`, so restrictions such as `require_commits_behind` with `value = 0` no longer fail with HTTP 400
 * `bitbucket_group`, `bitbucket_group_membership` and the group data sources: a workspace UUID (such as `data.bitbucket_workspace.x.id`) is resolved to the slug the 1.0 groups API requires, instead of failing with 405/403 ([#258](https://github.com/DrFaust92/terraform-provider-bitbucket/issues/258))
 * `bitbucket_branch_restriction`: `users` and `groups` previously failed to populate in state at all, because the Bitbucket API's GDPR changes removed usernames from account responses while the provider still expected them. Now: `users` round-trips via UUID, and `groups.owner` round-trips via workspace slug or UUID (whichever form is already in your config/state). **Behavior change:** a config that lists a username in `users` previously showed no diff (because `Read` silently failed to populate state); it will now show a diff on every `plan`/`apply` until you switch that entry to the UUID shown in the new warning, or add `lifecycle { ignore_changes = [users] }`.
 
