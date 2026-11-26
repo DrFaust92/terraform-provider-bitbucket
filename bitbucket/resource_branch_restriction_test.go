@@ -1,6 +1,7 @@
 package bitbucket
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/hashicorp/go-cty/cty"
@@ -453,8 +454,8 @@ func TestCreateBranchRestriction(t *testing.T) {
 	if got.Pattern != "master" {
 		t.Errorf("Pattern = %q, want %q", got.Pattern, "master")
 	}
-	if got.Value != 2 {
-		t.Errorf("Value = %d, want %d", got.Value, 2)
+	if got.Value == nil || *got.Value != 2 {
+		t.Errorf("Value = %v, want %d", got.Value, 2)
 	}
 
 	wantUsers := []bitbucket.Account{
@@ -551,8 +552,8 @@ func TestBranchRestrictionBodyJSON(t *testing.T) {
 					Kind:            "require_review_group_approvals_to_merge",
 					BranchMatchKind: "glob",
 					Pattern:         "main",
-					Value:           2,
 				},
+				Value:                   int32Ptr(2),
 				PipelinesSourceBranches: tc.branches,
 			}
 
@@ -606,6 +607,18 @@ func TestBranchRestrictionBodyDecode(t *testing.T) {
 	}
 	if got.PipelinesSourceBranches == nil || !reflect.DeepEqual(*got.PipelinesSourceBranches, []string{"develop"}) {
 		t.Errorf("PipelinesSourceBranches = %v, want [develop]", got.PipelinesSourceBranches)
+	}
+	if got.Value != nil {
+		t.Errorf("Value = %d, want nil when the response has no value", *got.Value)
+	}
+
+	// value decodes into the shadowing pointer field, 0 included.
+	var zero branchRestrictionBody
+	if err := json.Unmarshal([]byte(`{"id": 7, "kind": "require_commits_behind", "value": 0}`), &zero); err != nil {
+		t.Fatalf("Unmarshal: %v", err)
+	}
+	if zero.Value == nil || *zero.Value != 0 {
+		t.Errorf("Value = %v, want 0", zero.Value)
 	}
 }
 
@@ -1410,4 +1423,227 @@ func testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName string
 		}
 		return fmt.Sprintf("%s/%s/%s", rs.Primary.Attributes["owner"], rs.Primary.Attributes["repository"], rs.Primary.ID), nil
 	}
+}
+
+// TestAccBitbucketBranchRestriction_valueZero checks that `value = 0` is sent
+// on both create and update rather than dropped (issue #19).
+func TestAccBitbucketBranchRestriction_valueZero(t *testing.T) {
+	rName := acctest.RandomWithPrefix("tf-test")
+	testUser := os.Getenv("BITBUCKET_TEAM")
+	resourceName := "bitbucket_branch_restriction.test"
+
+	resource.Test(t, resource.TestCase{
+		PreCheck:          func() { testAccPreCheck(t) },
+		ProviderFactories: testAccProviderFactories,
+		CheckDestroy:      testAccCheckBitbucketBranchRestrictionDestroy,
+		Steps: []resource.TestStep{
+			{
+				Config: testAccBitbucketBranchRestrictionValueConfig(testUser, rName, 0),
+				Check: resource.ComposeTestCheckFunc(
+					testAccCheckBitbucketBranchRestrictionExists(resourceName),
+					resource.TestCheckResourceAttr(resourceName, "kind", "require_commits_behind"),
+					resource.TestCheckResourceAttr(resourceName, "value", "0"),
+				),
+			},
+			{
+				Config: testAccBitbucketBranchRestrictionValueConfig(testUser, rName, 2),
+				Check:  resource.TestCheckResourceAttr(resourceName, "value", "2"),
+			},
+			{
+				Config: testAccBitbucketBranchRestrictionValueConfig(testUser, rName, 0),
+				Check:  resource.TestCheckResourceAttr(resourceName, "value", "0"),
+			},
+			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccCheckBitbucketBranchRestrictionImportStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+		},
+	})
+}
+
+// TestBranchRestrictionValue covers sending `value`: a non-zero value is
+// always sent, an explicit `value = 0` is sent (issue #19), and an unset
+// value is left out of the request body.
+func TestBranchRestrictionValue(t *testing.T) {
+	cases := []struct {
+		name      string
+		value     string
+		rawConfig cty.Value
+		wantValue *int32
+		wantJSON  string
+	}{
+		{
+			name:      "non-zero value",
+			value:     "2",
+			rawConfig: cty.ObjectVal(map[string]cty.Value{"value": cty.NumberIntVal(2)}),
+			wantValue: int32Ptr(2),
+			wantJSON:  `"value":2`,
+		},
+		{
+			name:      "explicit zero",
+			value:     "0",
+			rawConfig: cty.ObjectVal(map[string]cty.Value{"value": cty.NumberIntVal(0)}),
+			wantValue: int32Ptr(0),
+			wantJSON:  `"value":0`,
+		},
+		{
+			name:      "unset",
+			value:     "",
+			rawConfig: cty.ObjectVal(map[string]cty.Value{"value": cty.NullVal(cty.Number)}),
+		},
+		{
+			name:  "no raw config",
+			value: "",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			attrs := map[string]string{
+				"owner":             "myteam",
+				"repository":        "my-repo",
+				"kind":              "require_commits_behind",
+				"pattern":           "main",
+				"branch_match_kind": "glob",
+			}
+			if tc.value != "" {
+				attrs["value"] = tc.value
+			}
+
+			// A zero cty.Value (the "no raw config" case) reads as null.
+			state := &terraform.InstanceState{ID: "1", Attributes: attrs, RawConfig: tc.rawConfig}
+
+			d := resourceBranchRestriction().Data(state)
+			got := createBranchRestriction(d)
+
+			switch {
+			case tc.wantValue == nil && got.Value != nil:
+				t.Fatalf("Value = %d, want nil", *got.Value)
+			case tc.wantValue != nil && (got.Value == nil || *got.Value != *tc.wantValue):
+				t.Fatalf("Value = %v, want %d", got.Value, *tc.wantValue)
+			}
+
+			body, err := json.Marshal(got)
+			if err != nil {
+				t.Fatalf("json.Marshal: %v", err)
+			}
+
+			if tc.wantJSON != "" {
+				if !strings.Contains(string(body), tc.wantJSON) {
+					t.Errorf("body = %s, want it to contain %s", body, tc.wantJSON)
+				}
+				if n := strings.Count(string(body), `"value"`); n != 1 {
+					t.Errorf("body = %s, has %d value keys, want 1", body, n)
+				}
+			} else if strings.Contains(string(body), `"value"`) {
+				t.Errorf("body = %s, want no value key", body)
+			}
+		})
+	}
+}
+
+// TestBranchRestrictionValueFromPlan reads the raw config from the plan diff,
+// which is where Create and Update find it at apply time (the gRPC provider
+// sets InstanceDiff.RawConfig), rather than from the state fallback used in
+// TestBranchRestrictionValue.
+func TestBranchRestrictionValueFromPlan(t *testing.T) {
+	cases := []struct {
+		name       string
+		prior      map[string]string
+		configured bool
+		wantValue  *int32
+	}{
+		{
+			name:       "create with explicit zero",
+			configured: true,
+			wantValue:  int32Ptr(0),
+		},
+		{
+			name:       "update from 2 to explicit zero",
+			prior:      map[string]string{"value": "2"},
+			configured: true,
+			wantValue:  int32Ptr(0),
+		},
+		{
+			name: "create with value unset",
+		},
+	}
+
+	sm := schema.InternalMap(resourceBranchRestriction().Schema)
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := map[string]interface{}{
+				"owner":      "myteam",
+				"repository": "my-repo",
+				"kind":       "require_commits_behind",
+				"pattern":    "main",
+			}
+			rawValue := cty.NullVal(cty.Number)
+			if tc.configured {
+				raw["value"] = 0
+				rawValue = cty.NumberIntVal(0)
+			}
+
+			var state *terraform.InstanceState
+			if tc.prior != nil {
+				attrs := map[string]string{
+					"id":                "1",
+					"owner":             "myteam",
+					"repository":        "my-repo",
+					"kind":              "require_commits_behind",
+					"pattern":           "main",
+					"branch_match_kind": "glob",
+				}
+				for k, v := range tc.prior {
+					attrs[k] = v
+				}
+				state = &terraform.InstanceState{ID: "1", Attributes: attrs}
+			}
+
+			diff, err := sm.Diff(context.Background(), state, terraform.NewResourceConfigRaw(raw), nil, nil, true)
+			if err != nil {
+				t.Fatalf("Diff: %v", err)
+			}
+			if diff == nil {
+				diff = &terraform.InstanceDiff{}
+			}
+			diff.RawConfig = cty.ObjectVal(map[string]cty.Value{"value": rawValue})
+
+			d, err := sm.Data(state, diff)
+			if err != nil {
+				t.Fatalf("Data: %v", err)
+			}
+
+			got := createBranchRestriction(d).Value
+			switch {
+			case tc.wantValue == nil && got != nil:
+				t.Fatalf("Value = %d, want nil", *got)
+			case tc.wantValue != nil && (got == nil || *got != *tc.wantValue):
+				t.Fatalf("Value = %v, want %d", got, *tc.wantValue)
+			}
+		})
+	}
+}
+
+func int32Ptr(v int32) *int32 {
+	return &v
+}
+
+func testAccBitbucketBranchRestrictionValueConfig(testUser, rName string, value int) string {
+	return fmt.Sprintf(`
+resource "bitbucket_repository" "test" {
+  owner = %[1]q
+  name  = %[2]q
+}
+resource "bitbucket_branch_restriction" "test" {
+  owner      = %[1]q
+  repository = bitbucket_repository.test.name
+  kind       = "require_commits_behind"
+  pattern    = "main"
+  value      = %[3]d
+}
+`, testUser, rName, value)
 }

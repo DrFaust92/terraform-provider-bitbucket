@@ -40,6 +40,11 @@ type BranchRestriction struct {
 // promotes to the top level) and adds the fields that model lacks.
 type branchRestrictionBody struct {
 	bitbucket.Branchrestriction
+	// Value shadows the embedded Branchrestriction.Value, whose `omitempty`
+	// drops a value of 0 (e.g. require_commits_behind = 0) so Bitbucket
+	// rejects the request. encoding/json prefers the shallower field, and as
+	// a pointer it is sent whenever it is non-nil, 0 included.
+	Value *int32 `json:"value,omitempty"`
 	// PipelinesSourceBranches is a pointer so that nil omits the field while
 	// a pointer to an empty slice sends [] to clear it on update.
 	PipelinesSourceBranches *[]string `json:"pipelines_source_branches,omitempty"`
@@ -195,6 +200,18 @@ func branchRestrictionCustomizeDiff(_ context.Context, d *schema.ResourceDiff, _
 	)
 }
 
+// branchRestrictionValue returns the value to send, or nil to leave it out of
+// the request. It is sent when non-zero, and also when it is 0 but set
+// explicitly in config, so `value = 0` reaches Bitbucket while an unset
+// value is still omitted.
+func branchRestrictionValue(d *schema.ResourceData) *int32 {
+	v := int32(d.Get("value").(int))
+	if v != 0 || configAttrSet(d.GetRawConfig(), "value") {
+		return &v
+	}
+	return nil
+}
+
 // configAttrSet reports whether attr is set in config. d.Get can't tell
 // `value = 0` from an unset value, so this looks at the raw config.
 func configAttrSet(config cty.Value, attr string) bool {
@@ -248,10 +265,10 @@ func createBranchRestriction(d *schema.ResourceData) *branchRestrictionBody {
 	restict := &branchRestrictionBody{
 		Branchrestriction: bitbucket.Branchrestriction{
 			Kind:   d.Get("kind").(string),
-			Value:  int32(d.Get("value").(int)),
 			Users:  users,
 			Groups: groups,
 		},
+		Value: branchRestrictionValue(d),
 	}
 
 	// Send the list whenever it's set, and send [] when it was just removed
@@ -342,7 +359,11 @@ func resourceBranchRestrictionsRead(ctx context.Context, d *schema.ResourceData,
 	d.SetId(fmt.Sprintf("%v", brRes.Id))
 	d.Set("kind", brRes.Kind)
 	d.Set("pattern", brRes.Pattern)
-	d.Set("value", brRes.Value)
+	value := 0
+	if brRes.Value != nil {
+		value = int(*brRes.Value)
+	}
+	d.Set("value", value)
 	if err := d.Set("users", flattenBranchRestrictionUsers(brRes.Users)); err != nil {
 		return diag.FromErr(fmt.Errorf("error setting users: %w", err))
 	}
