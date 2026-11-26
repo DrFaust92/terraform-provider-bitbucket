@@ -11,6 +11,7 @@
 ### Bug fixes
 
 * `bitbucket_group`, `bitbucket_group_membership` and the group data sources: a workspace UUID (such as `data.bitbucket_workspace.x.id`) is resolved to the slug the 1.0 groups API requires, instead of failing with 405/403 ([#258](https://github.com/DrFaust92/terraform-provider-bitbucket/issues/258))
+* `bitbucket_group`, `bitbucket_group_membership` and the group data sources: a workspace slug with uppercase letters (such as `MyWorkspace`) is lowercased for the 1.0 groups API, which answers HTTP 400 to reads unless the slug is lowercase. `workspace` keeps the value from your configuration, so existing state shows no diff
 * `bitbucket_branch_restriction`: `users` and `groups` previously failed to populate in state at all, because the Bitbucket API's GDPR changes removed usernames from account responses while the provider still expected them. Now: `users` round-trips via UUID, and `groups.owner` round-trips via workspace slug or UUID (whichever form is already in your config/state). **Behavior change:** a config that lists a username in `users` previously showed no diff (because `Read` silently failed to populate state); it will now show a diff on every `plan`/`apply` until you switch that entry to the UUID shown in the new warning, or add `lifecycle { ignore_changes = [users] }`.
 
 ## 1.3.0 (March 15, 2021)
