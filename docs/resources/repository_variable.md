@@ -47,8 +47,20 @@ resource "bitbucket_repository_variable" "debug" {
 
 ## Import
 
-Repository Variables can be imported using their `workspace/repository/key/uuid` ID, e.g.
+Repository Variables can be imported using their `workspace/repository/key` ID, e.g.
 
 ```sh
-terraform import bitbucket_repository_variable.example workspace/repository/key/uuid
+terraform import bitbucket_repository_variable.example workspace/repository/key
 ```
+
+The provider looks the variable's UUID up by its key, which is unique within a repository. This lets an `import`
+block build the ID from configuration alone:
+
+```hcl
+import {
+  to = bitbucket_repository_variable.debug
+  id = "gob/illusions/DEBUG"
+}
+```
+
+The `workspace/repository/key/uuid` form is still accepted and skips the lookup.

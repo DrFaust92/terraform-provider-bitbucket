@@ -40,6 +40,12 @@ func TestAccBitbucketRepositoryVariable_basic(t *testing.T) {
 				ImportStateVerify: true,
 			},
 			{
+				ResourceName:      resourceName,
+				ImportState:       true,
+				ImportStateIdFunc: testAccBitbucketRepoVariableImportByKeyStateIdFunc(resourceName),
+				ImportStateVerify: true,
+			},
+			{
 				Config: testAccBitbucketRepositoryVariableConfig(owner, rName, "test-val-2"),
 				Check: resource.ComposeTestCheckFunc(
 					testAccCheckBitbucketRepositoryVariableExists(resourceName),
@@ -115,5 +121,16 @@ func testAccBitbucketRepoVariableImportStateIdFunc(resourceName string) resource
 		}
 
 		return fmt.Sprintf("%s/%s/%s", rs.Primary.Attributes["repository"], rs.Primary.ID, rs.Primary.Attributes["uuid"]), nil
+	}
+}
+
+func testAccBitbucketRepoVariableImportByKeyStateIdFunc(resourceName string) resource.ImportStateIdFunc {
+	return func(s *terraform.State) (string, error) {
+		rs, ok := s.RootModule().Resources[resourceName]
+		if !ok {
+			return "", fmt.Errorf("Not found: %s", resourceName)
+		}
+
+		return fmt.Sprintf("%s/%s", rs.Primary.Attributes["repository"], rs.Primary.ID), nil
 	}
 }
