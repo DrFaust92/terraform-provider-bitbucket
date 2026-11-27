@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/DrFaust92/bitbucket-go-client"
+	"github.com/antihax/optional"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
@@ -21,16 +22,7 @@ func resourceRepositoryVariable() *schema.Resource {
 		ReadWithoutTimeout:   resourceRepositoryVariableRead,
 		DeleteWithoutTimeout: resourceRepositoryVariableDelete,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, meta interface{}) ([]*schema.ResourceData, error) {
-				idParts := strings.Split(d.Id(), "/")
-				if len(idParts) != 4 || idParts[0] == "" || idParts[1] == "" || idParts[2] == "" || idParts[3] == "" {
-					return nil, fmt.Errorf("unexpected format of ID (%q), expected REPOSITORY/KEY/UUID", d.Id())
-				}
-				d.SetId(idParts[2])
-				d.Set("uuid", idParts[3])
-				d.Set("repository", fmt.Sprintf("%s/%s", idParts[0], idParts[1]))
-				return []*schema.ResourceData{d}, nil
-			},
+			StateContext: resourceRepositoryVariableImport,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -171,6 +163,66 @@ func resourceRepositoryVariableDelete(ctx context.Context, d *schema.ResourceDat
 	}
 
 	return nil
+}
+
+// resourceRepositoryVariableImport accepts WORKSPACE/REPO-SLUG/KEY/UUID, or WORKSPACE/REPO-SLUG/KEY and looks the
+// UUID up by key, which is unique within a repository.
+func resourceRepositoryVariableImport(ctx context.Context, d *schema.ResourceData, m interface{}) ([]*schema.ResourceData, error) {
+	idParts := strings.Split(d.Id(), "/")
+	for _, part := range idParts {
+		if part == "" {
+			idParts = nil
+			break
+		}
+	}
+	if len(idParts) != 3 && len(idParts) != 4 {
+		return nil, fmt.Errorf("unexpected format of ID (%q), expected WORKSPACE/REPO-SLUG/KEY or WORKSPACE/REPO-SLUG/KEY/UUID", d.Id())
+	}
+
+	workspace, repoSlug, key := idParts[0], idParts[1], idParts[2]
+	var uuid string
+	if len(idParts) == 4 {
+		uuid = idParts[3]
+	} else {
+		vars, err := listRepositoryVariables(m.(Clients).genClient, workspace, repoSlug)
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range vars {
+			if v.Key == key {
+				uuid = v.Uuid
+				break
+			}
+		}
+		if uuid == "" {
+			return nil, fmt.Errorf("repository variable %q not found in %s/%s", key, workspace, repoSlug)
+		}
+	}
+
+	d.SetId(key)
+	d.Set("uuid", uuid)
+	d.Set("repository", fmt.Sprintf("%s/%s", workspace, repoSlug))
+	return []*schema.ResourceData{d}, nil
+}
+
+// listRepositoryVariables returns every pipeline variable of a repository, following pages.
+func listRepositoryVariables(c ProviderConfig, workspace, repoSlug string) ([]bitbucket.PipelineVariable, error) {
+	pipeApi := c.ApiClient.PipelinesApi
+
+	var all []bitbucket.PipelineVariable
+	for page := int32(1); ; page++ {
+		opts := &bitbucket.PipelinesApiGetRepositoryPipelineVariablesOpts{Page: optional.NewInt32(page)}
+		vars, res, err := pipeApi.GetRepositoryPipelineVariables(c.AuthContext, workspace, repoSlug, opts)
+		if err := handleClientError(res, err); err != nil {
+			return nil, err
+		}
+
+		all = append(all, vars.Values...)
+
+		if vars.Next == "" || len(vars.Values) == 0 {
+			return all, nil
+		}
+	}
 }
 
 func repoVarId(repo string) (string, string, error) {
